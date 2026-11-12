@@ -44,6 +44,7 @@ docker compose up -d                # cam_bridge、detector、bridge
 | `docker/` | 各 image 的 Dockerfile |
 | `deploy/` | 每種跑法一個資料夾：compose 與機器上的服務設定 |
 | `tools/` | 水池測試腳本等不屬於 ROS package 的工具 |
+| `mission/` | 自主流程：偵測結果 → `/auv_control`。目前有過門（`gate_pass.py`），在 `bridge` 容器裡執行 |
 | `docs/` | 架構、操作、排錯紀錄 |
 
 之後會加的 package（用到時再建）：`orca_mission`（行為樹或 FSM 決策）、`orca_safety`（漏水、電池、kill switch、節點看門狗）、`orca_localization`、`orca_actuators`（電磁鐵、投放）、`orca_description`（URDF、TF）、`orca_bringup`（同一台機器上多個節點的 launch）。

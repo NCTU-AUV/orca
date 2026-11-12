@@ -4,6 +4,7 @@
 # 兩條連線都由筆電主動發起，筆電不用開防火牆。所有節點在同一台，ROS_LOCALHOST_ONLY=1，DDS 不出網路。
 #
 #   docker compose up -d                  # cam_bridge、detector、bridge
+#   ./gate_pass.sh                        # 上面三個服務 + 等就緒 + 開始過門流程
 #   docker compose up -d cam_bridge detector   # 只跑影像（飛控沒接時）
 name: orca
 
@@ -48,8 +49,9 @@ services:
       - torch-cache:/root/.cache       # rfdetr／torch 下載的檔案，避免每次重抓
     command: [ros2, run, orca_perception, detector]
 
-  # mavros + auv_adapter（/auv_control）。水池測試腳本在這裡面跑：
+  # mavros + auv_adapter（/auv_control）。水池測試腳本、自主流程在這裡面跑：
   #   docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+  #   docker compose exec bridge bash -ic 'python3 /orca/mission/gate_pass.py'    # 過門，要有 detector
   # 第一次用之前，RPi 的 mavproxy 要先加 udpin 14560（deploy/rpi-relay/mavproxy-udpin.sh）
   bridge:
     <<: [*ros, *base]
@@ -57,6 +59,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
+      - ../../mission:/orca/mission:ro
       - ./logs/bridge:/logs
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, rpi_relay]

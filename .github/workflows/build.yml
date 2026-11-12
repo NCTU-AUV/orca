@@ -1,4 +1,4 @@
-# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，並檢查 tools 的 Python 語法
+# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，檢查 tools、mission 的 Python 語法，跑過門流程的測試
 name: build
 
 on:
@@ -17,4 +17,6 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py deploy/rpi-relay/cam_relay.py
+        run: python3 -m py_compile tools/pool_tests/*.py deploy/rpi-relay/cam_relay.py mission/*.py
+      - name: mission tests
+        run: python3 mission/test_gate_pass.py

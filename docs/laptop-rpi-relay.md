@@ -44,6 +44,9 @@ docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections
 
 # 水池測試腳本
 docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+
+# 過門：一個指令起三個服務、等飛控／相機／偵測就緒、開始 mission/gate_pass.py（解鎖前會等你按 Enter）
+./gate_pass.sh
 ```
 
 上岸檢查飛控連線（不要解鎖）：`docker compose exec bridge bash -ic 'ros2 topic echo --once /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。
