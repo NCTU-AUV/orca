@@ -68,7 +68,7 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 | 水池測試：定向 | 同上，`water_heading.py [航向 度 ...]` | 定深 0.15 m，預設 90 → 0 → −90 → 0° |
 | 水池測試：小任務 | 同上，`water_mission.py` | 下潛 → 直走 → 轉 180° → 走回來 |
 | 鍵盤操控 | `docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py [--gain 0.3] [--max-depth 0.25]` | pygame 視窗，按鍵與安全機制見 [`keyboard.py`](tools/teleop/keyboard.py) 檔頭 |
-| 看偵測畫面（只限實機） | `docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections/image` | |
+| 看相機畫面（只限實機） | `docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /camera/camera/color/image_raw` | 原始影像。topic 換成 `/detections/image` 是畫好偵測框的畫面，視窗左上的下拉選單也能切換 |
 | 過門流程測試（不需要 ROS） | `python3 mission/test_gate_pass.py` | 用簡化模型檢查流程邏輯與正負號，CI 也會跑 |
 
 - 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh` 已經跑過。
