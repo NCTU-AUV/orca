@@ -28,6 +28,7 @@ services:
   # RPi cam-relay → /camera/camera/color/image_raw、camera_info（topic 名稱同 realsense2_camera）
   cam_bridge:
     <<: [*ros, *base]
+    restart: on-failure     # 程式出錯結束就重開；compose stop／down 不受影響
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
@@ -42,6 +43,7 @@ services:
       context: ../..
       dockerfile: docker/perception-x86.Dockerfile
     gpus: all
+    restart: on-failure     # 程式出錯結束就重開（重開要重新載入模型）；compose stop／down 不受影響
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
