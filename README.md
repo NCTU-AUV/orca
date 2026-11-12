@@ -63,7 +63,7 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 
 | 功能 | 指令 | 說明 |
 |---|---|---|
-| 過門（自主，只限實機） | `./gate_pass.sh [--depth 0.3 --surge 0.2 --pass-s 8]` | 起服務、等飛控／相機／偵測就緒、解鎖前等你按 Enter，然後下潛 → 對準 → 前進 → 盲走過門 → 上鎖。參數見 [`mission/gate_pass.py`](mission/gate_pass.py) 的 `Params` |
+| 過門（自主，只限實機） | `./gate_pass.sh [--depth 0.3 --surge 0.2 --pass-s 5]` | 起服務、等飛控／相機／偵測就緒、解鎖前等你按 Enter，然後下潛 → 對準 → 前進 → 盲走過門 → 上鎖。參數見 [`mission/gate_pass.py`](mission/gate_pass.py) 的 `Params` |
 | 水池測試：定深 | `docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py [深度 m ...]'` | 預設 0.15 → 0.20 → 0.10 m |
 | 水池測試：定向 | 同上，`water_heading.py [航向 度 ...]` | 定深 0.15 m，預設 90 → 0 → −90 → 0° |
 | 水池測試：小任務 | 同上，`water_mission.py` | 下潛 → 直走 → 轉 180° → 走回來 |

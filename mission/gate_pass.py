@@ -11,7 +11,7 @@
 任何一步逾時、或遠距離跟丟等不回來：中止，上鎖。
 
 用法（bridge 容器內，cam_bridge、detector、bridge 都要在跑）：
-    python3 /orca/mission/gate_pass.py [--depth 0.30] [--surge 0.2] [--pass-s 8] [--classes gate,qualification_gate]
+    python3 /orca/mission/gate_pass.py [--depth 0.30] [--surge 0.2] [--pass-s 5] [--classes gate,qualification_gate]
   其餘參數改下面的 Params。任何時候 Ctrl-C：上鎖，船浮上來。
 
 介面（見 runner.py）：控制只發 /auv_control；深度、航向跟 auv_adapter 讀同樣的 mavros topic
@@ -57,7 +57,7 @@ class Params:
     reacquire_s: float = 5.0        # 遠距離跟丟後停下來等這麼久，還是沒有就中止
 
     # ----- PASS、STOP -----
-    pass_s: float = 8.0             # 盲走幾秒
+    pass_s: float = 5.0             # 盲走幾秒
     stop_s: float = 2.0             # 過門後停幾秒再上鎖
 
     # ----- 共用 -----

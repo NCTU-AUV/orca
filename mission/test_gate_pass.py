@@ -143,7 +143,8 @@ def test_sway_corrects_sideways_drift():
 def test_lost_when_close_goes_blind():
     """還沒到 near_width 偵測就掉了（門超出視野）：最後門框夠寬，照樣盲走過門。"""
     world = World(gate_xy=(6.0, 0.5), min_range=2.2)
-    flow, phases, logs = run(world)
+    # 2.2 m 外就跟丟，模型速度 0.3 m/s：盲走要比預設的 5 秒長才走得到門
+    flow, phases, logs = run(world, Params(pass_s=8.0))
     assert_passed(world, flow, phases)
     assert any('近距離跟丟' in line for line in logs), logs
 
