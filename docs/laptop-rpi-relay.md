@@ -37,6 +37,7 @@ ml/rfdetr/fetch_weights.sh                 # 第一次
 cd deploy/laptop
 docker compose up -d cam_bridge detector   # 影像與偵測
 docker compose up -d bridge                # 飛控（RPi 的 mavproxy 要先加 udpin）
+docker compose up -d recorder              # 所有 topic 錄成 rosbag → logs/bag/（docker compose up -d 會一起起）
 docker compose logs -f detector            # 每 5 秒印 fps 與延遲
 
 # 看偵測畫面（主機先跑 xhost +SI:localuser:root）

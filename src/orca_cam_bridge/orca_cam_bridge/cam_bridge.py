@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """cam_bridge：接 RPi cam-relay 的 JPEG 串流，發布成跟 realsense2_camera 一樣的 topic。
 
-    /camera/camera/color/image_raw    sensor_msgs/Image（rgb8）
-    /camera/camera/color/camera_info  sensor_msgs/CameraInfo
+    /camera/camera/color/image_raw             sensor_msgs/Image（rgb8）
+    /camera/camera/color/image_raw/compressed  sensor_msgs/CompressedImage（RPi 送來的原始 JPEG，
+                                               給 recorder 錄；格式同 image_transport 的 compressed）
+    /camera/camera/color/camera_info           sensor_msgs/CameraInfo
 
 節點名稱 camera、namespace camera，跟 realsense2_camera 預設一樣，下游節點搬到 Jetson
 換成 realsense2_camera 時不用改。通訊協定見 deploy/rpi-relay/cam_relay.py。
@@ -25,7 +27,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 
 
 def recv_exact(sock, n):
@@ -48,6 +50,7 @@ class CamBridge(Node):
         self.frame_id = self.declare_parameter('frame_id', 'camera_color_optical_frame').value
 
         self.pub_img = self.create_publisher(Image, '~/color/image_raw', 1)
+        self.pub_jpeg = self.create_publisher(CompressedImage, '~/color/image_raw/compressed', 1)
         self.pub_info = self.create_publisher(CameraInfo, '~/color/camera_info', 1)
         self.info_msg = None
         self.offsets = deque(maxlen=300)   # sent - recv 的樣本（秒）
@@ -96,7 +99,7 @@ class CamBridge(Node):
             if img is None:
                 self.get_logger().warn('bad JPEG frame, skipped')
                 return
-            self.publish(img, capture_local)
+            self.publish(img, payload, capture_local)
             self.n_frames += 1
             self.n_bytes += len(payload)
             self.lat_sum += recv_time - capture_local
@@ -114,7 +117,7 @@ class CamBridge(Node):
         return m
 
     # ---- 發布 ----
-    def publish(self, bgr, stamp_sec):
+    def publish(self, bgr, jpeg, stamp_sec):
         stamp = Time(seconds=stamp_sec).to_msg()
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         msg = Image()
@@ -125,6 +128,13 @@ class CamBridge(Node):
         msg.step = msg.width * 3
         msg.data.frombytes(rgb.tobytes())   # 直接塞 bytes，避免逐元素檢查
         self.pub_img.publish(msg)
+        if self.pub_jpeg.get_subscription_count():
+            cmsg = CompressedImage()
+            cmsg.header = msg.header
+            # image_transport 的寫法：「解碼後要還原成的 encoding; jpeg compressed 壓縮時的 encoding」
+            cmsg.format = 'rgb8; jpeg compressed bgr8'
+            cmsg.data = jpeg
+            self.pub_jpeg.publish(cmsg)
         if self.info_msg is not None:
             self.info_msg.header.stamp = stamp
             self.pub_info.publish(self.info_msg)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一個指令跑過門：起 cam_bridge、detector、bridge → 等飛控、相機、偵測都就緒 → 開始 mission/gate_pass.py。
+# 一個指令跑過門：起 cam_bridge、detector、bridge、recorder → 等飛控、相機、偵測都就緒 → 開始 mission/gate_pass.py。
 #
 #   ./gate_pass.sh [gate_pass.py 的參數，例如 --pass-s 6 --depth 0.3]
 #
@@ -15,7 +15,7 @@ if [[ ! -f ../../ml/rfdetr/weights/checkpoint_best_total.pth ]]; then
   ../../ml/rfdetr/fetch_weights.sh
 fi
 
-docker compose up -d cam_bridge detector bridge
+docker compose up -d cam_bridge detector bridge recorder
 
 # 在 bridge 容器裡執行指令（/entrypoint.sh 會載入 ROS 環境）
 in_bridge() { docker compose exec -T bridge /entrypoint.sh "$@" 2>/dev/null; }
