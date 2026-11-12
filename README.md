@@ -14,20 +14,75 @@ NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的自主水下載具 **Orca**
 
 姿態與定深的閉迴路、推力分配都交給飛控上的 ArduSub。上層（ROS 2 Humble）只送六自由度 effort、目標深度、目標航向，介面是 [`orca_msgs/AuvControl`](src/orca_msgs/msg/AuvControl.msg)。整體設計見 [docs/architecture.md](docs/architecture.md)。
 
-## 現在怎麼跑
-
-| 情境 | 位置 | 說明 |
-|---|---|---|
-| 實機：ROS 全部跑在筆電，RPi 只當轉接（**現行做法**） | [`deploy/laptop/`](deploy/laptop/) | [docs/laptop-rpi-relay.md](docs/laptop-rpi-relay.md) |
-| 模擬：Gazebo + ArduSub SITL | [`deploy/sim/`](deploy/sim/) | [docs/sim/README.md](docs/sim/README.md) |
+## 使用方法
 
 需求：Linux、Docker（含 compose plugin）、NVIDIA 驅動與 NVIDIA Container Toolkit。主機不用裝 ROS。
 
+這一節列出所有用法，每項的細節見連結的文件或程式檔頭。以下 `docker compose` 指令都在對應的 `deploy/<跑法>/` 底下執行。
+
+### 跑法
+
+| 情境 | 位置 | 詳細說明 |
+|---|---|---|
+| 實機：ROS 全部跑在筆電，RPi 只當轉接（**現行做法**） | [`deploy/laptop/`](deploy/laptop/)、[`deploy/rpi-relay/`](deploy/rpi-relay/) | [docs/laptop-rpi-relay.md](docs/laptop-rpi-relay.md) |
+| 模擬：Gazebo + ArduSub SITL | [`deploy/sim/`](deploy/sim/) | [docs/sim/README.md](docs/sim/README.md) |
+
+兩種跑法的 bridge 都綁 UDP 14551，不能同時跑。
+
+**實機**
+
 ```bash
-ml/rfdetr/fetch_weights.sh          # 第一次：下載偵測模型權重
-cd deploy/laptop
-docker compose up -d                # cam_bridge、detector、bridge
+# RPi 端（只要做一次，在 deploy/rpi-relay/ 執行；RPi 的 ssh 名稱預設 rpi，可用 RPI_HOST 改）
+./deploy.sh                    # 安裝 cam-relay 並設成開機自動跑（取代 realsense-web）
+./deploy.sh revert             # 改回 realsense-web
+scp mavproxy-udpin.sh rpi: && ssh -t rpi sudo bash mavproxy-udpin.sh   # mavproxy 加 udpin 14560
+
+# 筆電端（在 deploy/laptop/ 執行）
+../../ml/rfdetr/fetch_weights.sh            # 第一次：下載偵測模型權重
+docker compose up -d                        # cam_bridge、detector、bridge
+docker compose up -d cam_bridge detector    # 只跑影像與偵測（飛控沒接時）
+docker compose logs -f detector             # 每 5 秒印 fps 與延遲
+docker compose exec bridge bash -ic 'ros2 topic echo --once /mavros/state'   # 上岸檢查飛控，要看到 connected: true
+docker compose down                         # 全部關掉
 ```
+
+**模擬**
+
+```bash
+# 在 deploy/sim/ 執行
+./run.sh                       # build（第一次）並啟動 sim、bridge，前景執行，Ctrl-C 結束
+GUI=0 ./run.sh                 # 不開 Gazebo 視窗
+WORLD=<檔名> ./run.sh          # 換 sim/worlds/ 底下的世界檔
+```
+
+QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，否則跟 mavros 的搖桿指令打架。
+
+### 功能
+
+以下在實機與模擬都能用，除非特別註明。同一時間只能有一個程式發 `/auv_control`（鍵盤、測試腳本、過門擇一）。
+
+| 功能 | 指令 | 說明 |
+|---|---|---|
+| 過門（自主，只限實機） | `./gate_pass.sh [--depth 0.3 --surge 0.2 --pass-s 8]` | 起服務、等飛控／相機／偵測就緒、解鎖前等你按 Enter，然後下潛 → 對準 → 前進 → 盲走過門 → 上鎖。參數見 [`mission/gate_pass.py`](mission/gate_pass.py) 的 `Params` |
+| 水池測試：定深 | `docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py [深度 m ...]'` | 預設 0.15 → 0.20 → 0.10 m |
+| 水池測試：定向 | 同上，`water_heading.py [航向 度 ...]` | 定深 0.15 m，預設 90 → 0 → −90 → 0° |
+| 水池測試：小任務 | 同上，`water_mission.py` | 下潛 → 直走 → 轉 180° → 走回來 |
+| 鍵盤操控 | `docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py [--gain 0.3] [--max-depth 0.25]` | pygame 視窗，按鍵與安全機制見 [`keyboard.py`](tools/teleop/keyboard.py) 檔頭 |
+| 看偵測畫面（只限實機） | `docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections/image` | |
+| 過門流程測試（不需要 ROS） | `python3 mission/test_gate_pass.py` | 用簡化模型檢查流程邏輯與正負號，CI 也會跑 |
+
+- 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh` 已經跑過。
+- 測試腳本和過門都會先列檢查清單、歸零（以浮在水面時的深度與航向為 0）。任何時候 Ctrl-C 都會上鎖，船浮上來。
+- 紀錄 CSV 存在 `deploy/<跑法>/logs/bridge/`。
+
+### 其他
+
+| 要做的事 | 怎麼做 |
+|---|---|
+| 自己寫上層控制 | 以 20 Hz 發 `/auv_control`，欄位見 [`AuvControl.msg`](src/orca_msgs/msg/AuvControl.msg) 的註解；下水時呼叫 `/auv_adapter/zero` 歸零。介面見 [docs/architecture.md](docs/architecture.md) |
+| 不經 ROS 直接跑偵測模型、重新訓練 | [ml/rfdetr/README.md](ml/rfdetr/README.md) |
+| 改飛控參數 | [firmware/ardusub/README.md](firmware/ardusub/README.md)：實機改完存回 `real.parm`，影響控制的參數同步到 `sitl.parm` |
+| 模擬的 log、已知問題、改設定後怎麼生效 | [docs/sim/README.md](docs/sim/README.md) |
 
 ## 資料夾
 
@@ -43,7 +98,7 @@ docker compose up -d                # cam_bridge、detector、bridge
 | `ml/` | 模型訓練的 notebook、設定、下載權重的腳本。權重放在 GitHub Releases，資料集不放進 repo |
 | `docker/` | 各 image 的 Dockerfile |
 | `deploy/` | 每種跑法一個資料夾：compose 與機器上的服務設定 |
-| `tools/` | 水池測試腳本等不屬於 ROS package 的工具 |
+| `tools/` | 水池測試腳本、鍵盤操控（`teleop/keyboard.py`）等不屬於 ROS package 的工具 |
 | `mission/` | 自主流程：偵測結果 → `/auv_control`。目前有過門（`gate_pass.py`），在 `bridge` 容器裡執行 |
 | `docs/` | 架構、操作、排錯紀錄 |
 
