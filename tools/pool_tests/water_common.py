@@ -27,7 +27,7 @@ from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from orca_msgs.msg import AuvControl
 
-MAX_DEPTH = 0.25    # 池子最深 0.25 m（以浮著時為 0），目標深度不能超過
+MAX_DEPTH = 0.50    # 池子最深 0.25 m（以浮著時為 0），目標深度不能超過
 RATE_HZ = 20
 MANUAL, DEPTH_HOLD = AuvControl.MODE_MANUAL, AuvControl.MODE_DEPTH_HOLD
 MODE_FC = {AuvControl.MODE_MANUAL: 'MANUAL', AuvControl.MODE_STABILIZE: 'STABILIZE',
