@@ -58,6 +58,16 @@ python3 /orca/tools/pool_tests/water_heading.py   # 定深 0.15 m，航向 +90 �
 - 結果 CSV 在 `deploy/sim/logs/bridge/`。mavros 與 auv_adapter 的輸出用 `docker compose logs -f bridge` 看。
 - `/auv_control` 的用法與各欄位意思見 [`AuvControl.msg`](../../src/orca_msgs/msg/AuvControl.msg) 的註解。
 
+### 鍵盤操控
+
+```bash
+docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py   # --gain 0.3、--max-depth 0.25
+```
+
+開一個 pygame 視窗，視窗有焦點時：W/S、A/D、R/F、Q/E 按住出力（放開就停），1/2/3 切模式，Enter 解鎖、空白鍵上鎖，Z 歸零（上鎖時），H 定深開關（開啟時 R/F 改成移動目標深度），`-`/`=` 調推力大小。視窗失去焦點時全部歸零；關閉視窗會上鎖。完整說明在 [`keyboard.py`](../../tools/teleop/keyboard.py) 的檔頭。不要跟測試程式同時跑。
+
+`./run.sh` 已經跑過 `xhost +SI:localuser:root`；`GUI=0` 時要自己跑一次，視窗才開得起來。
+
 ### QGroundControl（選用）
 
 在主機上開 QGC 就會自動連上（UDP 14550），可以看姿態、模式、參數。**QGC 的 joystick 要關掉**：QGC 與 mavros 的 system id 都是 255，兩邊的搖桿指令會打架。

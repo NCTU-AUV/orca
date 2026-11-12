@@ -1,6 +1,6 @@
 # 上層給 auv_adapter.py 的控制指令。
-# adapter 以固定頻率把「最後收到的那筆」轉成 ArduSub 的搖桿指令（MANUAL_CONTROL），
-# 上層停發時會一直沿用最後一筆。
+# adapter 以固定頻率把「最後收到的那筆」轉成 ArduSub 的搖桿指令（MANUAL_CONTROL）。
+# 上層要持續發送（20 Hz）：超過 0.5 秒沒收到，adapter 改送中位（不切模式、不上鎖）。
 
 # ===== 控制來源 =====
 # 只標示是誰發的，adapter 不依它做任何處理

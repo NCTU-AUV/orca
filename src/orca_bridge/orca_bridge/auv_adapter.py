@@ -13,7 +13,9 @@
 - 零點：呼叫 /auv_adapter/zero（std_srvs/srv/Trigger）時記下當下的深度和航向。
   剛下水、浮在水面時呼叫一次；沒歸零過就不送目標深度和目標航向。
 
-上層停發時沿用最後一筆，不做斷線處理。還沒收到任何指令前只送中位，不動模式、不解鎖。
+看門狗：超過 CMD_TIMEOUT_S 沒收到 /auv_control（上層當掉、被強制結束）就送中位，
+不切模式、不上鎖，也不重送目標；在 ALT_HOLD 下就是停在原地維持深度。收到新指令就恢復。
+還沒收到任何指令前只送中位，不動模式、不解鎖。
 Ctrl-C 結束時送中位並上鎖。Ctrl-Z 也當成 Ctrl-C 處理。
 
 前提：飛控 JS_GAIN_DEFAULT = 1.0（effort 1.0 才是全力），QGC 的 joystick 關閉。
@@ -37,6 +39,7 @@ from orca_msgs.msg import AuvControl
 RATE_HZ = 20          # MANUAL_CONTROL 的發送頻率；停送超過 FS_PILOT_TIMEOUT（3 秒）飛控會上鎖
 RETRY_S = 1.0         # 模式沒切成功時，隔多久再送一次
 TARGET_RESEND_S = 1.0
+CMD_TIMEOUT_S = 0.5   # 上層都是 20 Hz 發送，連掉 10 筆才算逾時
 
 MODE_NAMES = {
     AuvControl.MODE_MANUAL: 'MANUAL',
@@ -61,6 +64,8 @@ class Adapter(Node):
     def __init__(self):
         super().__init__('auv_adapter')
         self.cmd = None             # 最後收到的 AuvControl
+        self.cmd_time = 0.0         # 收到 self.cmd 的時間（monotonic）
+        self.stale = False          # 看門狗逾時中
         self.state = State()        # 飛控狀態（mode、armed）
         self.depth = None           # 飛控座標的深度，往下為正（零點是飛控開機時）
         self.yaw = None             # 目前航向，ROS 慣例（ENU）：rad，逆時針為正
@@ -93,6 +98,10 @@ class Adapter(Node):
             source = '鍵盤' if msg.control_source == AuvControl.SW_MANUAL else '自主程式'
             self.get_logger().info(f'控制來源：{source}')
         self.cmd = msg
+        self.cmd_time = time.monotonic()
+        if self.stale:
+            self.stale = False
+            self.get_logger().info('重新收到 /auv_control，恢復')
         # arm_command 是事件：只在收到的這一刻處理
         if msg.arm_command in (AuvControl.ARM, AuvControl.DISARM):
             want = msg.arm_command == AuvControl.ARM
@@ -154,6 +163,12 @@ class Adapter(Node):
     def on_timer(self):
         now = time.monotonic()
         c = self.cmd
+        if c is not None and now - self.cmd_time > CMD_TIMEOUT_S:
+            if not self.stale:
+                self.stale = True
+                self.get_logger().warn(f'超過 {CMD_TIMEOUT_S} 秒沒收到 /auv_control，'
+                                       '送中位（不切模式、不上鎖）')
+            c = None
         self.pub.publish(self.manual_control(c))
         if c is None:
             return

@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-vision-msgs \
         ros-humble-rqt-image-view \
         python3-opencv \
+        python3-pygame \
         wget \
  && rm -rf /var/lib/apt/lists/*
 

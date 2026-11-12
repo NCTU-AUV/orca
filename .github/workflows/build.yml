@@ -17,6 +17,6 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py deploy/rpi-relay/cam_relay.py mission/*.py
+        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py
       - name: mission tests
         run: python3 mission/test_gate_pass.py

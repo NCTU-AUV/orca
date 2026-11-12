@@ -66,6 +66,8 @@ services:
 
   # 臨時工具，不會隨 up 啟動。看畫面（主機先跑 xhost +SI:localuser:root）：
   #   docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections/image
+  # 鍵盤操控：
+  #   docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py
   tools:
     <<: [*ros, *base]
     profiles: [tools]

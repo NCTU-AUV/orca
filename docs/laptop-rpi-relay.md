@@ -45,6 +45,9 @@ docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections
 # 水池測試腳本
 docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
 
+# 鍵盤操控（主機先跑 xhost +SI:localuser:root）。按鍵與安全機制見 tools/teleop/keyboard.py 檔頭
+docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py
+
 # 過門：一個指令起三個服務、等飛控／相機／偵測就緒、開始 mission/gate_pass.py（解鎖前會等你按 Enter）
 ./gate_pass.sh
 ```
