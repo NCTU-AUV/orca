@@ -1,0 +1,79 @@
+# 現行做法：ROS 2 全部跑在筆電，RPi 不跑 ROS、只當轉接（見 docs/architecture.md）。
+#   相機：RPi cam-relay（TCP 5600）→ cam_bridge
+#   飛控：RPi mavproxy（UDP 14560，udpin）↔ bridge 裡的 mavros
+# 兩條連線都由筆電主動發起，筆電不用開防火牆。所有節點在同一台，ROS_LOCALHOST_ONLY=1，DDS 不出網路。
+#
+#   docker compose up -d                  # cam_bridge、detector、bridge
+#   docker compose up -d cam_bridge detector   # 只跑影像（飛控沒接時）
+name: orca
+
+x-ros: &ros
+  network_mode: host
+  # Fast DDS 在同一台機器上走共享記憶體（/dev/shm）；容器各自有 /dev/shm 時
+  # 互相看得到 topic 卻收不到資料，所以全部共用主機的 IPC
+  ipc: host
+  init: true
+  environment: &ros-env
+    ROS_LOCALHOST_ONLY: "1"
+    ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+
+x-base: &base
+  image: orca-base
+  build:
+    context: ../..
+    dockerfile: docker/base.Dockerfile
+
+services:
+  # RPi cam-relay → /camera/camera/color/image_raw、camera_info（topic 名稱同 realsense2_camera）
+  cam_bridge:
+    <<: [*ros, *base]
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+    command: [ros2, run, orca_cam_bridge, cam_bridge, --ros-args, -p, "host:=${RPI_HOST:-10.42.0.1}"]
+
+  # RF-DETR：影像 → /detections（vision_msgs/Detection2DArray）、/detections/image（畫好框）
+  # 權重先跑 ml/rfdetr/fetch_weights.sh 下載
+  detector:
+    <<: *ros
+    image: orca-perception
+    build:
+      context: ../..
+      dockerfile: docker/perception-x86.Dockerfile
+    gpus: all
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../ml/rfdetr/weights:/model:ro
+      - torch-cache:/root/.cache       # rfdetr／torch 下載的檔案，避免每次重抓
+    command: [ros2, run, orca_perception, detector]
+
+  # mavros + auv_adapter（/auv_control）。水池測試腳本在這裡面跑：
+  #   docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+  # 第一次用之前，RPi 的 mavproxy 要先加 udpin 14560（deploy/rpi-relay/mavproxy-udpin.sh）
+  bridge:
+    <<: [*ros, *base]
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../tools:/orca/tools:ro
+      - ./logs/bridge:/logs
+    stop_grace_period: 20s
+    command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, rpi_relay]
+
+  # 臨時工具，不會隨 up 啟動。看畫面（主機先跑 xhost +SI:localuser:root）：
+  #   docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections/image
+  tools:
+    <<: [*ros, *base]
+    profiles: [tools]
+    environment:
+      <<: *ros-env
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../tools:/orca/tools:ro
+
+volumes:
+  torch-cache:

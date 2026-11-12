@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<!--
+  SAUVC 泳池：25 x 16 m、深 1.6 m。模型原點在水面中心，地板在 z = -1.6。
+  幾何與貼圖取自 https://github.com/NCTU-AUV/SAUVC-Simulation
+  （sim_ws/src/bringup/worlds/water_world.sdf 的 pool_structure 與 models/pool_ground）。
+  比賽道具不放在這裡，由世界檔另外 <include>。
+-->
+<sdf version="1.9">
+  <model name="pool">
+    <static>true</static>
+
+    <!-- 地板。plane 的 UV 0..1 鋪滿整面，貼圖是整個地板的單張烘焙（含水道線）。 -->
+    <link name="floor">
+      <pose>0 0 -1.6 0 0 0</pose>
+      <collision name="collision">
+        <geometry>
+          <plane><normal>0 0 1</normal><size>25 16</size></plane>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <plane><normal>0 0 1</normal><size>25 16</size></plane>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr><metal>
+            <albedo_map>model://pool/materials/textures/pool_floor_competition.png</albedo_map>
+            <metalness>0</metalness>
+            <roughness>0.55</roughness>
+          </metal></pbr>
+        </material>
+      </visual>
+    </link>
+
+    <!-- 池壁高 2.0 m，高出水面 0.4 m。 -->
+    <link name="wall_x_pos">
+      <pose>12.65 0 -0.6 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>0.3 16.3 2.0</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>0.3 16.3 2.0</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><pbr><metal>
+          <albedo_map>model://pool/materials/textures/pool_wall_competition.png</albedo_map>
+          <metalness>0</metalness><roughness>0.55</roughness>
+        </metal></pbr></material>
+      </visual>
+    </link>
+    <link name="wall_x_neg">
+      <pose>-12.65 0 -0.6 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>0.3 16.3 2.0</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>0.3 16.3 2.0</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><pbr><metal>
+          <albedo_map>model://pool/materials/textures/pool_wall_competition.png</albedo_map>
+          <metalness>0</metalness><roughness>0.55</roughness>
+        </metal></pbr></material>
+      </visual>
+    </link>
+    <link name="wall_y_pos">
+      <pose>0 8.15 -0.6 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>25 0.3 2.0</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>25 0.3 2.0</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><pbr><metal>
+          <albedo_map>model://pool/materials/textures/pool_wall_competition.png</albedo_map>
+          <metalness>0</metalness><roughness>0.55</roughness>
+        </metal></pbr></material>
+      </visual>
+    </link>
+    <link name="wall_y_neg">
+      <pose>0 -8.15 -0.6 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>25 0.3 2.0</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>25 0.3 2.0</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><pbr><metal>
+          <albedo_map>model://pool/materials/textures/pool_wall_competition.png</albedo_map>
+          <metalness>0</metalness><roughness>0.55</roughness>
+        </metal></pbr></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

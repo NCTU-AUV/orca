@@ -1,0 +1,20 @@
+# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，並檢查 tools 的 Python 語法
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  colcon:
+    runs-on: ubuntu-latest
+    container: ros:humble
+    steps:
+      - uses: actions/checkout@v4
+      - name: colcon build
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --event-handlers console_direct+
+      - name: python syntax
+        run: python3 -m py_compile tools/pool_tests/*.py deploy/rpi-relay/cam_relay.py

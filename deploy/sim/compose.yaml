@@ -1,0 +1,48 @@
+# 模擬：Gazebo 泳池 + ArduSub SITL，加上跟實機同一套 bridge（只差 mavros 的 fcu_url）。
+# 用 ./run.sh 啟動。實機的水池測試腳本不用改就能對模擬跑：
+#   docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+name: orca-sitl
+
+services:
+  sim:
+    image: orca-sim
+    build:
+      context: ../../docker
+      dockerfile: sim.Dockerfile
+    network_mode: host
+    init: true                    # 讓 docker stop 的 SIGTERM 送得到 start.sh
+    gpus: all
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - DISPLAY=${DISPLAY:-:0}
+      - ROS_LOCALHOST_ONLY=1
+      - GZ_IP=127.0.0.1           # gz-transport 只走本機，不與同網段的其他 Gazebo 互通
+      - WORLD=${WORLD:-orca_pool.sdf}
+      - GUI=${GUI:-1}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../../sim:/sim:ro
+      - ../../firmware/ardusub:/params:ro
+      - ./logs/sim:/logs
+
+  bridge:
+    image: orca-base
+    build:
+      context: ../..
+      dockerfile: docker/base.Dockerfile
+    network_mode: host            # 收 mavproxy 送到 127.0.0.1:14551 的封包
+    ipc: host
+    init: true
+    depends_on: [sim]
+    environment:
+      - ROS_LOCALHOST_ONLY=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../tools:/orca/tools:ro
+      - ./logs/bridge:/logs
+    stop_grace_period: 20s
+    command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, sitl]

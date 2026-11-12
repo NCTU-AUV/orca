@@ -1,0 +1,9 @@
+{
+ "run": "v2_large_e30",
+ "epochs": 30,
+ "lr": 0.0001,
+ "batch": 8,
+ "accum": 2,
+ "data": "sauvc_rfdetr_v2",
+ "gpu": "NVIDIA A100-SXM4-40GB"
+}

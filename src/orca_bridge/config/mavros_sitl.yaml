@@ -1,0 +1,29 @@
+# mavros 設定：ArduSub SITL（deploy/sim）
+# 三份設定只差 fcu_url。/** 表示套用到 mavros 底下的所有節點
+/**:
+  ros__parameters:
+    # 模擬容器裡的 mavproxy 把 SITL 的 MAVLink 送到本機 UDP 14551。
+    # 格式 udp://<本機綁定位址>@<對方位址>，對方留空 = 回覆給送封包來的那一端
+    fcu_url: "udp://127.0.0.1:14551@"
+    gcs_url: ""
+
+    # mavros 自己的 system id。ArduSub 只接受 system id 等於 MAV_GCS_SYSID（255）
+    # 送來的搖桿指令，用預設的 1 送出去會被默默丟掉
+    system_id: 255
+
+    # 飛控的 system id／component id
+    tgt_system: 1
+    tgt_component: 1
+
+    # 只載入要用的外掛：先用 denylist 全部擋掉，allowlist 再放行。
+    # 只寫 allowlist 沒有效果，mavros 只會擋「在 denylist 裡、又不在 allowlist 裡」的外掛
+    plugin_denylist: ["*"]
+    plugin_allowlist:
+      - sys_status       # /mavros/state、/mavros/set_mode，以及送心跳給飛控
+      - command          # /mavros/cmd/arming 解鎖／上鎖
+      - imu              # /mavros/imu/data：姿態，歸零時記航向
+      - rc_io            # /mavros/rc/out：飛控輸出給 8 顆馬達的 PWM（測試程式用）
+      - manual_control   # /mavros/manual_control/send 搖桿指令
+      - param            # /mavros/param：讀寫飛控參數（例如 JS_GAIN_DEFAULT）
+      - global_position  # /mavros/global_position/rel_alt：EKF 融合後的深度（向上為正，水下是負的）
+      - setpoint_raw     # /mavros/setpoint_raw/global 目標深度、/mavros/setpoint_raw/attitude 目標航向

@@ -1,0 +1,30 @@
+# mavros 設定：ROS 跑在筆電，飛控接在 RPi（現行做法）
+# 三份設定只差 fcu_url。/** 表示套用到 mavros 底下的所有節點
+/**:
+  ros__parameters:
+    # 飛控序列埠由 RPi 的 mavproxy.service 獨佔。mavros 從本機 14551 送到 RPi mavproxy 的 udpin 14560
+    # （deploy/rpi-relay/mavproxy-udpin.sh 加的），mavproxy 收到後就把飛控資料回送到這裡。筆電不用開 port。
+    # 格式 udp://<本機綁定位址:埠>@<對方位址:埠>
+    fcu_url: "udp://:14551@10.42.0.1:14560"
+    gcs_url: ""
+
+    # mavros 自己的 system id。ArduSub 只接受 system id 等於 MAV_GCS_SYSID（255）
+    # 送來的搖桿指令，用預設的 1 送出去會被默默丟掉
+    system_id: 255
+
+    # 飛控的 system id／component id
+    tgt_system: 1
+    tgt_component: 1
+
+    # 只載入要用的外掛：先用 denylist 全部擋掉，allowlist 再放行。
+    # 只寫 allowlist 沒有效果，mavros 只會擋「在 denylist 裡、又不在 allowlist 裡」的外掛
+    plugin_denylist: ["*"]
+    plugin_allowlist:
+      - sys_status       # /mavros/state、/mavros/set_mode，以及送心跳給飛控
+      - command          # /mavros/cmd/arming 解鎖／上鎖
+      - imu              # /mavros/imu/data：姿態，歸零時記航向
+      - rc_io            # /mavros/rc/out：飛控輸出給 8 顆馬達的 PWM（測試程式用）
+      - manual_control   # /mavros/manual_control/send 搖桿指令
+      - param            # /mavros/param：讀寫飛控參數（例如 JS_GAIN_DEFAULT）
+      - global_position  # /mavros/global_position/rel_alt：EKF 融合後的深度（向上為正，水下是負的）
+      - setpoint_raw     # /mavros/setpoint_raw/global 目標深度、/mavros/setpoint_raw/attitude 目標航向

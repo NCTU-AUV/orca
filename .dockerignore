@@ -1,0 +1,4 @@
+# ROS 映像只需要 src/ 和 entrypoint，其他（權重、log、sim）不送進 build context
+*
+!src
+!docker/entrypoint.sh

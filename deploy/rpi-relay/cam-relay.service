@@ -1,0 +1,14 @@
+# RPi 的使用者層級服務（~/.config/systemd/user/），由 deploy.sh 安裝。orca 有開 linger，開機就會跑。
+# 跟 realsense-web 搶同一台相機，兩者互斥：啟動這個會自動停掉 realsense-web。
+[Unit]
+Description=RealSense color -> JPEG over TCP :5600 (for laptop cam_bridge)
+Conflicts=realsense-web.service
+
+[Service]
+WorkingDirectory=%h/workspace/cam-relay
+ExecStart=%h/workspace/cam-relay/.venv/bin/python -u %h/workspace/cam-relay/cam_relay.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

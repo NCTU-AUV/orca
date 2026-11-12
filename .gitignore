@@ -1,0 +1,14 @@
+# colcon（在主機上 build 時）
+/build/
+/install/
+/log/
+# 執行時產生
+deploy/*/logs/
+# 模型權重：放 GitHub Releases，用 ml/rfdetr/fetch_weights.sh 下載
+ml/*/weights/
+*.pth
+*.onnx
+*.engine
+__pycache__/
+*.pyc
+.venv/

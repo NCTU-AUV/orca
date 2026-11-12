@@ -1,0 +1,349 @@
+<?xml version="1.0"?>
+<!--
+  Orca 載具：船體、浮力體、阻力、8 顆推進器。
+  幾何、質量、慣量、阻力係數取自 https://github.com/NCTU-AUV/SAUVC-Simulation
+  的 models/orca_auv；原模型的相機、IMU、高度計不帶入。
+
+  座標：機體 FLU（x 前、y 左、z 上），原點為質心。
+  浮力體（main_body_buoyancy）中心在質心上方 0.115 m，浮心高於重心，靜止時自動回正。
+  推進器 0-3 垂直、4-7 水平（與 x 軸夾 45 度）；推力沿各自 joint 的 x 軸。
+  指令 topic：/model/orca/joint/thruster_N_joint/cmd_thrust（gz.msgs.Double，單位 N）。
+-->
+<sdf version="1.9">
+  <model name="orca">
+
+    <link name="base_link">
+      <inertial>
+        <mass>20</mass>
+        <inertia><ixx>0.2</ixx><iyy>0.5</iyy><izz>0.5</izz></inertia>
+      </inertial>
+
+      <!-- 唯一的 collision，同時是 Buoyancy 計算排水體積的形狀：0.024 m^3 → 浮力約 235 N -->
+      <collision name="main_body_buoyancy">
+        <pose>0 0 0.115 0 0 0</pose>
+        <geometry><box><size>0.6 0.2 0.2</size></box></geometry>
+      </collision>
+
+      <visual name="hull">
+        <pose>0 0 0.115 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.115</radius><length>0.6</length></cylinder></geometry>
+        <material><diffuse>0 0.8 0 1</diffuse></material>
+      </visual>
+      <visual name="frame">
+        <pose>0 0 -0.07 0 0 0</pose>
+        <geometry><box><size>0.6 0.34 0.14</size></box></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+
+      <!-- ArduPilotPlugin 必需：JSON 封包的陀螺儀與加速度取自這顆 IMU。
+           roll 180 度讓讀數是 ArduPilot 的機體座標 FRD。 -->
+      <sensor name="imu_sensor" type="imu">
+        <pose degrees="true">0 0 0 180 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>1000</update_rate>
+      </sensor>
+    </link>
+
+    <plugin filename="gz-sim-hydrodynamics-system" name="gz::sim::systems::Hydrodynamics">
+      <link_name>base_link</link_name>
+      <water_density>1000</water_density>
+      <!-- 附加質量 -->
+      <xDotU>-1</xDotU><yDotV>-1</yDotV><zDotW>-1</zDotW>
+      <kDotP>-0.1</kDotP><mDotQ>-0.1</mDotQ><nDotR>-0.1</nDotR>
+      <!-- 線性阻尼 -->
+      <xU>-30</xU><yV>-30</yV><zW>-30</zW>
+      <kP>-1</kP><mQ>-1</mQ><nR>-1</nR>
+      <!-- 二次阻尼 -->
+      <xUabsU>-1</xUabsU><yVabsV>-1</yVabsV><zWabsW>-1</zWabsW>
+      <kPabsP>-1</kPabsP><mQabsQ>-1</mQabsQ><nRabsR>-1</nRabsR>
+    </plugin>
+
+    <link name="thruster_0">
+      <pose relative_to="base_link">0.15 0.237 0 0 1.5707963268 0</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_0_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_0</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_0_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_1">
+      <pose relative_to="base_link">0.15 -0.237 0 0 1.5707963268 0</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_1_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_1</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_1_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_2">
+      <pose relative_to="base_link">-0.15 0.237 0 0 1.5707963268 0</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_2_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_2</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_2_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_3">
+      <pose relative_to="base_link">-0.15 -0.237 0 0 1.5707963268 0</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_3_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_3</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_3_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_4">
+      <pose relative_to="base_link">0.2965 0.213 0 0 0 -0.7853981634</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_4_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_4</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_4_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_5">
+      <pose relative_to="base_link">0.2965 -0.213 0 0 0 0.7853981634</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_5_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_5</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_5_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_6">
+      <pose relative_to="base_link">-0.2965 0.213 0 0 0 0.7853981634</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_6_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_6</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_6_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <link name="thruster_7">
+      <pose relative_to="base_link">-0.2965 -0.213 0 0 0 -0.7853981634</pose>
+      <inertial>
+        <mass>0.427</mass>
+        <inertia><ixx>0.0006</ixx><iyy>0.0003</iyy><izz>0.0003</izz></inertia>
+      </inertial>
+      <visual name="visual">
+        <pose>0 0 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <material><diffuse>0.1 0.1 0.1 1</diffuse></material>
+      </visual>
+    </link>
+    <joint name="thruster_7_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>thruster_7</child>
+      <axis><xyz>1 0 0</xyz></axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <joint_name>thruster_7_joint</joint_name>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.076</propeller_diameter>
+      <thrust_coefficient>1.0</thrust_coefficient>
+    </plugin>
+    <!--
+      ArduPilotPlugin：與 SITL 以 JSON over UDP 9002 交換狀態與 8 路 PWM，lockstep 同步。
+      推力 [N] = multiplier * ((PWM - 1100) / 800 - 0.5)，|multiplier| = 90 → ±45 N
+      （T200 @16 V 約 -4.07 ~ +5.25 kgf 的平均）。
+      multiplier 的正負號 = MOT_n_DIRECTION * (推進器 joint 軸與 ArduSub 定義的推力方向同向 ? +1 : -1)：
+      實機用 MOT_n_DIRECTION 補償螺旋槳正反轉與接線，模擬沒有這些差異，在這裡抵銷，
+      使 PWM 的意義與實機相同。
+    -->
+    <plugin filename="ArduPilotPlugin" name="ArduPilotPlugin">
+      <fdm_addr>127.0.0.1</fdm_addr>
+      <fdm_port_in>9002</fdm_port_in>
+      <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
+      <lock_step>1</lock_step>
+      <!-- 外掛預設 no_time_sync = 1，SITL 收到會把 AHRS_EKF_TYPE 預設改成 10（直接用模擬真值、不跑 EKF）。
+           關掉它，SITL 才跟實機一樣用 EKF3。 -->
+      <no_time_sync>0</no_time_sync>
+      <!-- 模型 FLU → ArduPilot 機體 FRD；Gazebo 世界 ENU → NED -->
+      <modelXYZToAirplaneXForwardZDown degrees="true">0 0 0 180 0 0</modelXYZToAirplaneXForwardZDown>
+      <gazeboXYZToNED degrees="true">0 0 0 180 0 90</gazeboXYZToNED>
+      <imuName>imu_sensor</imuName>
+
+      <!-- SERVO1 = ArduSub 馬達 1（水平、右前）→ 推進器 5 -->
+      <control channel="0">
+        <jointName>thruster_5_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_5_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>90</multiplier>
+      </control>
+      <!-- SERVO2 = ArduSub 馬達 2（水平、左前）→ 推進器 4 -->
+      <control channel="1">
+        <jointName>thruster_4_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_4_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>-90</multiplier>
+      </control>
+      <!-- SERVO3 = ArduSub 馬達 3（水平、右後）→ 推進器 7 -->
+      <control channel="2">
+        <jointName>thruster_7_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_7_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>-90</multiplier>
+      </control>
+      <!-- SERVO4 = ArduSub 馬達 4（水平、左後）→ 推進器 6 -->
+      <control channel="3">
+        <jointName>thruster_6_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_6_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>90</multiplier>
+      </control>
+      <!-- SERVO5 = ArduSub 馬達 5（垂直、右前）→ 推進器 1 -->
+      <control channel="4">
+        <jointName>thruster_1_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_1_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>90</multiplier>
+      </control>
+      <!-- SERVO6 = ArduSub 馬達 6（垂直、左前）→ 推進器 0 -->
+      <control channel="5">
+        <jointName>thruster_0_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_0_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>-90</multiplier>
+      </control>
+      <!-- SERVO7 = ArduSub 馬達 7（垂直、右後）→ 推進器 3 -->
+      <control channel="6">
+        <jointName>thruster_3_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_3_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>-90</multiplier>
+      </control>
+      <!-- SERVO8 = ArduSub 馬達 8（垂直、左後）→ 推進器 2 -->
+      <control channel="7">
+        <jointName>thruster_2_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/model/orca/joint/thruster_2_joint/cmd_thrust</cmd_topic>
+        <servo_min>1100</servo_min>
+        <servo_max>1900</servo_max>
+        <offset>-0.5</offset>
+        <multiplier>90</multiplier>
+      </control>
+    </plugin>
+
+  </model>
+</sdf>
