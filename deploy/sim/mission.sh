@@ -13,7 +13,7 @@
 # - 第一次會下載模型權重、build image，要等比較久。
 # - 不列檢查清單（--no-checklist）。任何時候 Ctrl-C：上鎖，船浮上來。
 # - 紀錄：logs/mission/<樹>_<時間>.csv，rosbag（MCAP，影像只有畫好框的 JPEG）在同名的 logs/bag/<樹>_<時間>/，
-#   從樹開始錄到樹結束（Ctrl-C 也會收尾），用 Foxglove 直接開 .mcap。
+#   從樹開始錄到樹結束、船浮上水面（mission 上鎖後最多等 30 秒，Ctrl-C 也一樣），收尾（不到 1 秒）後用 Foxglove 直接開 .mcap。
 # - 全部關掉：docker compose --profile vision down
 # - 跟實機的 deploy/laptop 都綁 UDP 14551，不能同時跑。
 set -euo pipefail

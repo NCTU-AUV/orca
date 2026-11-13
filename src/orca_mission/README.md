@@ -20,6 +20,8 @@ deploy/laptop/mission.sh gate_pass -p depth=0.5 -p pass_s=6    # -p 覆寫樹的
 
 無論樹成功或失敗、流程中飛控自己上鎖、程式出錯、Ctrl-C、Ctrl-Z、`docker stop`，都會送 MANUAL、全 0、DISARM，並等飛控上鎖。adapter 的看門狗在 0.5 秒沒收到 `/auv_control` 時只會改送中位，不切模式、不上鎖（ALT_HOLD 下船會停在水裡維持深度），所以上鎖一定要由這裡做。
 
+上鎖之後會等船浮上水面（深度 ≤ 0.05 m 持續 1 秒，最多 30 秒）才結束，CSV 跟著記到上浮的過程；`mission.sh` 在 `mission` 結束後才停止錄 rosbag，所以 bag 也錄到上浮為止。等的時候再按一次 Ctrl-C 就不等；`docker stop` 不等。
+
 ## 看狀態
 
 - 終端機每 0.5 秒印一行：目前的節點、深度、航向、指令、執行器的回饋。

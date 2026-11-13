@@ -25,8 +25,8 @@ RECORD=0 ./mission.sh                                # 不錄 rosbag
 ```
 
 - 每次執行都會重開 `simulator`，船回到水面、原點；其他服務沿用已經在跑的。要重跑就再執行一次。
-- 任何時候 Ctrl-C：上鎖、船浮上來，rosbag 也會收尾。
-- 紀錄：`logs/mission/<樹>_<時間>.csv`、`logs/bag/<樹>_<時間>/`（用 Foxglove 開裡面的 `.mcap`）。
+- 任何時候 Ctrl-C：上鎖、船浮上來。rosbag 從樹開始錄，樹結束、船浮上水面後自動停止並收尾（最多等 30 秒，再按一次 Ctrl-C 不等）。
+- 紀錄：`logs/mission/<樹>_<時間>.csv`、`logs/bag/<樹>_<時間>/`。bag 在 mission 結束後不到 1 秒就收尾好，接著就能用 Foxglove 開裡面的 `.mcap`。
 - 細節見[過門](#過門有門相機偵測)；樹的寫法與參數見 [`src/orca_mission`](../../src/orca_mission/README.md)。
 
 **只起模擬（跑水池測試程式、鍵盤操控）**：
@@ -133,7 +133,7 @@ WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
 WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉向、前進），不需要門
 ```
 
-一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator`（船回到水面、原點）→ 等 EKF 對準、飛控連線、偵測都就緒 → 開始錄 rosbag → 用 `mission` 服務跑行為樹（`--no-checklist`）→ 樹結束（含 Ctrl-C）後停止錄影。
+一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator`（船回到水面、原點）→ 等 EKF 對準、飛控連線、偵測都就緒 → 開始錄 rosbag → 用 `mission` 服務跑行為樹（`--no-checklist`）→ 樹結束（含 Ctrl-C）、上鎖、船浮上水面後停止錄影。
 
 每次執行的紀錄同名，`<樹>_<時間>`：
 

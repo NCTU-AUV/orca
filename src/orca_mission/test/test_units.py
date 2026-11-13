@@ -14,7 +14,7 @@ from orca_mission.snapshot import Snapshot
 from orca_mission.task_runner import Mode, TaskRunner
 from orca_mission.tasks import Status
 from orca_mission.tasks.basic import Hold
-from orca_mission.vehicle import Command, Limits, Shaper, VehicleState
+from orca_mission.vehicle import Command, Limits, Shaper, SurfaceWatch, VehicleState
 
 TREES = os.path.join(os.path.dirname(__file__), '..', 'trees')
 
@@ -59,6 +59,17 @@ def test_vehicle_zero_and_heading_history():
     assert v.heading_at(1.3) == pytest.approx(20.0)  # 比最新一筆新：用最新的
     assert math.isnan(v.heading_at(-1.0))
     assert math.isnan(v.depth(2.5))                  # 超過 1 秒沒更新
+
+
+def test_surface_watch_needs_shallow_for_hold_time():
+    w = SurfaceWatch(depth=0.05, hold_s=1.0)
+    assert not w.update(0.0, 0.30)                   # 還在水下
+    assert not w.update(1.0, 0.04)                   # 剛浮上來，開始計時
+    assert not w.update(1.5, 0.08)                   # 浪打下去：重新計時
+    assert not w.update(2.0, 0.02)
+    assert not w.update(2.5, math.nan)               # 深度不明：重新計時
+    assert not w.update(3.0, -0.01)
+    assert w.update(4.0, 0.0)                        # ≤ 0.05 m 持續 1 秒
 
 
 # ---------- perception ----------
