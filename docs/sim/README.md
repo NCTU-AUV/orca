@@ -68,6 +68,28 @@ docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py   # --gain 
 
 `./run.sh` 已經跑過 `xhost +SI:localuser:root`；`GUI=0` 時要自己跑一次，視窗才開得起來。
 
+### 過門（有門、相機、偵測）
+
+```bash
+./gate_pass.sh                              # 資格賽門，開 Gazebo 視窗
+GUI=0 ./gate_pass.sh --pass-s 6             # 不開視窗；後面的參數直接交給 mission/gate_pass.py
+WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
+```
+
+一個指令：沒有權重就先下載 → 起 `bridge`、`camera`、`detector`（`vision` profile）→ 重開 `sim`（船回到水面、原點）→ 等 EKF 對準、飛控連線、相機、偵測都就緒 → 執行 [`mission/gate_pass.py`](../../mission/gate_pass.py)。模擬裡不列實機的檢查清單，不用按 Enter。跑完容器繼續跑，再執行一次就是重跑；全部關掉用 `docker compose --profile vision down`。
+
+| 世界 | 內容 |
+|---|---|
+| `orca_qgate.sdf`（預設） | 資格賽門（`models/q_gate`），從水面垂到池底，任何深度都能過；在船頭前方 6 m、偏右 1 m |
+| `orca_gate.sdf` | 導航門（`models/gate`），立在池底、高 1 m，橫桿在水下 1.6 − 1.0 = 0.6 m：船要潛到約 0.9 m 才不會從橫桿上方經過 |
+
+- 兩個世界的船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）。
+- 門的模型取自 [SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 依 2026 規則書做的版本。
+- `camera` 服務（[`sim/gz_camera_bridge.py`](../../sim/gz_camera_bridge.py)）把 Gazebo 影像轉成跟實機一樣的 `/camera/camera/color/image_raw`、`camera_info`；`detector` 跟實機是同一個 RF-DETR 節點。不需要 `ros_gz`。
+- 2026-11-12 實測（`orca_qgate.sdf`、`GUI=0`）：相機約 11～14 fps；RF-DETR 把資格賽門認成 `gate`（分數 0.6～0.95，流程兩類都接受）；連跑兩次都走完，Gazebo 真值顯示通過門平面時離門中心 1.3 cm。
+- **畫面比真實水下乾淨**：沒有水的衰減、色偏、浮游物（Harmonic 的 ogre2 不支援 fog），偵測會比實機容易。適合驗證流程與方向，不代表實機的偵測距離。
+- 模擬裡 surge 0.2 約 0.8 m/s，盲走 8 秒會衝過門約 6 m，離池壁不到 2 m（現在 `gate_pass.py` 的預設是 5 秒）。
+
 ### QGroundControl（選用）
 
 在主機上開 QGC 就會自動連上（UDP 14550），可以看姿態、模式、參數。**QGC 的 joystick 要關掉**：QGC 與 mavros 的 system id 都是 255，兩邊的搖桿指令會打架。
@@ -130,11 +152,16 @@ docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py   # --gain 
 | `sim/start.sh` | 依序啟動 gz sim、ardusub、mavproxy |
 | `firmware/ardusub/sitl.parm` | 飛控參數（取自實機）與 SITL 模擬硬體參數 |
 | `sim/worlds/orca_pool.sdf` | 泳池世界（25 × 16 m、深 1.6 m，水面 z = 0） |
+| `sim/worlds/orca_qgate.sdf`、`orca_gate.sdf` | 泳池 + 有相機的 Orca + 資格賽門／導航門 |
 | `sim/models/pool/`、`sim/models/orca/` | 泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin） |
+| `sim/models/orca_cam/`、`gate/`、`q_gate/` | Orca + 前視相機、導航門、資格賽門 |
+| `sim/gz_camera_bridge.py` | Gazebo 相機 → ROS 影像（`camera` 服務） |
+| `deploy/sim/gate_pass.sh` | 一個指令跑過門 |
 | `src/orca_bridge/` | mavros + `auv_adapter.py`，跟實機共用 |
 | `tools/pool_tests/` | 水池測試腳本 |
 
 ## 之後要加東西
 
-- 比賽道具、相機：另寫一個世界檔 `<include>` 泳池與 Orca，用 `WORLD=<檔名> ./run.sh` 載入；相機做成獨立的附掛模型，不改 `models/orca`。
+- 比賽道具：另寫一個世界檔 `<include>` 泳池與 `orca_cam`（要相機）或 `orca`，用 `WORLD=<檔名>` 載入。過門的兩個世界檔可以當範本。
+- 水下成像（衰減、色偏）：SAUVC-Simulation 的 `underwater_camera_node.py` 用深度圖做，可以搬到 `gz_camera_bridge.py`。
 - ROS 橋接、視覺、任務層：在 `deploy/sim/compose.yaml` 新增服務（ROS 2 Humble、host network、`ROS_LOCALHOST_ONLY=1`），不改 `sim`、`bridge` 的埠與 topic。

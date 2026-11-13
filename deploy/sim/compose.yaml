@@ -1,7 +1,13 @@
 # 模擬：Gazebo 泳池 + ArduSub SITL，加上跟實機同一套 bridge（只差 mavros 的 fcu_url）。
 # 用 ./run.sh 啟動。實機的水池測試腳本不用改就能對模擬跑：
 #   docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+# 過門（有門、相機、detector 的世界）：./gate_pass.sh
+#   camera、detector 兩個服務在 vision profile 裡，平常的 ./run.sh 不會起它們
 name: orca-sitl
+
+x-ros-env: &ros-env
+  ROS_LOCALHOST_ONLY: "1"
+  ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
 
 services:
   sim:
@@ -19,6 +25,7 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - ROS_LOCALHOST_ONLY=1
       - GZ_IP=127.0.0.1           # gz-transport 只走本機，不與同網段的其他 Gazebo 互通
+      - GZ_PARTITION=orca_sim     # camera 服務要跟 sim 同一個 partition 才看得到影像
       - WORLD=${WORLD:-orca_pool.sdf}
       - GUI=${GUI:-1}
     volumes:
@@ -43,6 +50,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
+      - ../../mission:/orca/mission:ro
       - ./logs/bridge:/logs
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, sitl]
@@ -64,3 +72,43 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
+
+  # Gazebo 相機（sim/models/orca_cam）→ /camera/camera/color/image_raw、camera_info，
+  # topic 跟實機 cam_bridge 一樣。世界檔要用有相機的（orca_qgate.sdf、orca_gate.sdf）
+  camera:
+    image: orca-sim
+    profiles: [vision]
+    network_mode: host
+    ipc: host
+    init: true
+    depends_on: [sim]
+    environment:
+      <<: *ros-env
+      GZ_IP: 127.0.0.1
+      GZ_PARTITION: orca_sim
+    volumes:
+      - ../../sim:/sim:ro
+    command: [python3, -u, /sim/gz_camera_bridge.py]
+
+  # 跟實機同一個 RF-DETR 節點：影像 → /detections。權重先跑 ml/rfdetr/fetch_weights.sh
+  detector:
+    image: orca-perception
+    build:
+      context: ../..
+      dockerfile: docker/perception-x86.Dockerfile
+    profiles: [vision]
+    network_mode: host
+    ipc: host
+    init: true
+    gpus: all
+    environment:
+      <<: *ros-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../ml/rfdetr/weights:/model:ro
+      - torch-cache:/root/.cache
+    command: [ros2, run, orca_perception, detector]
+
+volumes:
+  torch-cache:

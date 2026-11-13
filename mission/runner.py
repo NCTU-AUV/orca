@@ -277,8 +277,8 @@ def on_ctrl_z(signum, frame):
     raise KeyboardInterrupt
 
 
-def run(name, flow, classes, min_score):
-    """共用的開始與收尾。"""
+def run(name, flow, classes, min_score, checklist=True):
+    """共用的開始與收尾。checklist=False 時不等使用者確認（模擬用）。"""
     signal.signal(signal.SIGTSTP, on_ctrl_z)
     # 不讓 rclpy 處理 Ctrl-C：它預設會先關掉 ROS，結束時的 DISARM 就送不出去
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
@@ -293,10 +293,11 @@ def run(name, flow, classes, min_score):
     try:
         if not ready(t):
             return
-        print('開始前確認：')
-        for item in CHECKLIST:
-            print(f'  - {item}')
-        input('  >>> 都確認了按 Enter（Ctrl-C 取消）')
+        if checklist:
+            print('開始前確認：')
+            for item in CHECKLIST:
+                print(f'  - {item}')
+            input('  >>> 都確認了按 Enter（Ctrl-C 取消）')
         if not t.zero():
             return
         started = True

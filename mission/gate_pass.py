@@ -230,13 +230,16 @@ def main():
     ap.add_argument('--classes', default='gate,qualification_gate',
                     help='當作門的偵測類別，逗號分隔；同一幀有多個時取分數最高的')
     ap.add_argument('--min-score', type=float, default=0.5, help='低於這個分數的偵測不用')
+    ap.add_argument('--no-checklist', action='store_true',
+                    help='不列檢查清單、不等 Enter，直接開始（只在模擬用）')
     args = ap.parse_args()
     if not (0.0 < args.depth and 0.0 < args.surge <= 1.0 and args.pass_s >= 0.0):
         ap.error('depth 要大於 0，surge 要在 0 ~ 1，pass-s 不能是負的')
 
     from runner import run      # 這裡才 import：上面的流程不需要 ROS
     flow = GatePass(Params(depth=args.depth, surge=args.surge, pass_s=args.pass_s))
-    run('gate_pass', flow, classes=args.classes.split(','), min_score=args.min_score)
+    run('gate_pass', flow, classes=args.classes.split(','), min_score=args.min_score,
+        checklist=not args.no_checklist)
 
 
 if __name__ == '__main__':
