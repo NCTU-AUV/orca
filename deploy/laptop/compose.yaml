@@ -3,8 +3,8 @@
 #   飛控：RPi mavproxy（UDP 14560，udpin）↔ fc_adapter 裡的 mavros
 # 兩條連線都由筆電主動發起，筆電不用開防火牆。所有節點在同一台，ROS_LOCALHOST_ONLY=1，DDS 不出網路。
 #
-#   docker compose up -d                          # front_camera、object_detector、fc_adapter、recorder
-#   ./mission.sh                                  # 行為樹版過門（mission 服務），解鎖前會等你按 Enter
+#   docker compose up -d                          # front_camera、object_detector、fc_adapter；recorder、mission 不會起
+#   ./mission.sh                                  # 行為樹版過門（mission 服務），跑樹時才錄 rosbag；解鎖前會等你按 Enter
 #   ./gate_pass.sh                                # 舊版過門（mission/gate_pass.py）
 #   docker compose up -d front_camera object_detector   # 只跑影像（飛控沒接時）
 #
@@ -12,7 +12,7 @@
 #   front_camera     接 RPi 轉出的 D435i 影像 → /camera/camera/color/*（topic 同 realsense2_camera）
 #   object_detector  RF-DETR：影像 → /detections
 #   fc_adapter       飛控介面：mavros + auv_adapter（/auv_control → ArduSub）。程式不改
-#   recorder         所有 topic 錄成 rosbag（MCAP）
+#   recorder         所有 topic 錄成 rosbag（MCAP），只在 ./mission.sh 跑行為樹時錄
 #   mission          行為樹決策層（orca_mission）：/detections + mavros 狀態 → /auv_control
 #   gui_tools        rqt、鍵盤操控、回放 rosbag 等臨時工具
 # 底部相機：RPi 轉接還沒有底部相機那一路；接上之後發 /bottom_camera/image_raw、camera_info
@@ -77,15 +77,23 @@ services:
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, rpi_relay]
 
-  # 把所有 topic 錄成 rosbag（MCAP），存在 logs/bag/<啟動時間>/，每 5 分鐘切一個檔。
-  # 每次啟動開一個新資料夾；停止（compose stop／down）時送 SIGINT，讓它把檔案收尾。
-  # 原始影像不錄（太大，約 100 GB／小時），改錄 front_camera 轉發的原始 JPEG（.../image_raw/compressed）；
-  # 畫好框的影像錄 object_detector 發的 JPEG（/detections/image/compressed），原始的不錄。底部相機的原始影像同樣不錄。
+  # 把所有 topic 錄成 rosbag（MCAP），只在跑行為樹時錄：./mission.sh 跑樹前開、樹結束（含 Ctrl-C）且船浮上水面後停，
+  # 一次任務一個資料夾、一個 .mcap：logs/bag/<樹>_<時間>/，跟 logs/mission/<樹>_<時間>.csv 同名（RECORD=0 ./mission.sh 不錄）。
+  # 在 record profile，docker compose up -d 不會起它。
+  # 單獨錄（不經 mission.sh）：BAG_NAME=名稱 docker compose --profile record up -d recorder；
+  # 停止用 docker compose --profile record stop recorder（送 SIGINT，讓它把檔案收尾）。
+  # 不設 restart：重開會沿用同一個 BAG_NAME，資料夾已存在，ros2 bag record 會直接失敗。
+  # 影像只錄畫好框的 JPEG（object_detector 發的 /detections/image/compressed、/detections/bottom_image/compressed），
+  # 約 4 GB／小時（實測前視 26 fps、每秒約 1.1 MB）。相機的影像都不錄：原始影像太大（約 100 GB／小時），
+  # front_camera 轉發的原始 JPEG（.../image_raw/compressed，每秒約 1.3 MB）也不錄；要錄就把它從 -x 拿掉。
   recorder:
     <<: [*ros, *base]
-    restart: on-failure
+    profiles: [record]
     stop_signal: SIGINT
     stop_grace_period: 15s
+    environment:
+      <<: *ros-env
+      BAG_NAME: ${BAG_NAME:-}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./logs/bag:/bags
@@ -93,9 +101,9 @@ services:
       - bash
       - -c
       - >-
-        exec ros2 bag record -a -s mcap -d 300
-        -x '^(/camera/camera/color/image_raw|/bottom_camera/image_raw|/detections/image|/detections/bottom_image)$$'
-        -o /bags/$$(date +%Y%m%d_%H%M%S)
+        exec ros2 bag record -a -s mcap
+        -x '^(/camera/camera/color/image_raw.*|/bottom_camera/image_raw.*|/detections/image|/detections/bottom_image)$$'
+        -o /bags/$${BAG_NAME:-$$(date +%Y%m%d_%H%M%S)}
 
   # 行為樹決策層。不隨 up 啟動，用 ./mission.sh 或（要互動，列檢查清單、等 Enter）：
   #   docker compose --profile mission run --rm mission mission gate_pass

@@ -3,7 +3,8 @@
 
     /camera/camera/color/image_raw             sensor_msgs/Image（rgb8）
     /camera/camera/color/image_raw/compressed  sensor_msgs/CompressedImage（RPi 送來的原始 JPEG，
-                                               給 recorder 錄；格式同 image_transport 的 compressed）
+                                               有人訂閱才發；格式同 image_transport 的 compressed。
+                                               recorder 目前不錄它，只錄畫好框的影像）
     /camera/camera/color/camera_info           sensor_msgs/CameraInfo
 
 節點名稱 camera、namespace camera，跟 realsense2_camera 預設一樣，下游節點搬到 Jetson

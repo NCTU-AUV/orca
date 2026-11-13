@@ -80,8 +80,8 @@ fi
 
 if [[ $RECORD == 1 ]]; then
   stop_recorder() {
-    docker compose --profile record stop recorder > /dev/null 2>&1 || true     # SIGINT：把 .mcap 收尾
-    echo "rosbag 在 logs/bag/$RUN/（用 Foxglove 開裡面的 .mcap）"
+    docker compose --profile record stop recorder > /dev/null 2>&1 || true     # SIGINT：把 .mcap 收尾（< 1 秒）
+    echo "rosbag 在 $PWD/logs/bag/$RUN/（用 Foxglove 開裡面的 .mcap）"
   }
   trap stop_recorder EXIT
   BAG_NAME=$RUN docker compose --profile record up -d --force-recreate recorder
