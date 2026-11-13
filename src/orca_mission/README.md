@@ -12,7 +12,8 @@
 ```bash
 deploy/sim/mission.sh                               # 模擬：過門（資格賽門）
 WORLD=orca_pool.sdf deploy/sim/mission.sh smoke_test
-deploy/laptop/mission.sh                            # 實機：過門，解鎖前列檢查清單、等 Enter
+deploy/laptop/up.sh                                 # 實機：起容器、等就緒（映像不存在或過期才 build，已經在跑的不重開）
+deploy/laptop/mission.sh                            # 實機：過門（會先跑 up.sh），解鎖前列檢查清單、等 Enter
 deploy/laptop/mission.sh gate_pass -p depth=0.5 -p pass_s=6    # -p 覆寫樹的 vars
 ```
 
