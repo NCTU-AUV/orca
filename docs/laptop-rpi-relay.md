@@ -37,6 +37,7 @@ ml/rfdetr/fetch_weights.sh                 # 第一次
 cd deploy/laptop
 docker compose up -d cam_bridge detector   # 影像與偵測
 docker compose up -d bridge                # 飛控（RPi 的 mavproxy 要先加 udpin）
+docker compose up -d recorder              # 所有 topic 錄成 rosbag → logs/bag/（docker compose up -d 會一起起）
 docker compose logs -f detector            # 每 5 秒印 fps 與延遲
 
 # 看偵測畫面（主機先跑 xhost +SI:localuser:root）
@@ -44,6 +45,12 @@ docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections
 
 # 水池測試腳本
 docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+
+# 鍵盤操控（主機先跑 xhost +SI:localuser:root）。按鍵與安全機制見 tools/teleop/keyboard.py 檔頭
+docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py
+
+# 過門：一個指令起三個服務、等飛控／相機／偵測就緒、開始 mission/gate_pass.py（解鎖前會等你按 Enter）
+./gate_pass.sh
 ```
 
 上岸檢查飛控連線（不要解鎖）：`docker compose exec bridge bash -ic 'ros2 topic echo --once /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。

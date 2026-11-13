@@ -3,7 +3,8 @@
 #   飛控：RPi mavproxy（UDP 14560，udpin）↔ bridge 裡的 mavros
 # 兩條連線都由筆電主動發起，筆電不用開防火牆。所有節點在同一台，ROS_LOCALHOST_ONLY=1，DDS 不出網路。
 #
-#   docker compose up -d                  # cam_bridge、detector、bridge
+#   docker compose up -d                  # cam_bridge、detector、bridge、recorder
+#   ./gate_pass.sh                        # 上面四個服務 + 等就緒 + 開始過門流程
 #   docker compose up -d cam_bridge detector   # 只跑影像（飛控沒接時）
 name: orca
 
@@ -27,6 +28,7 @@ services:
   # RPi cam-relay → /camera/camera/color/image_raw、camera_info（topic 名稱同 realsense2_camera）
   cam_bridge:
     <<: [*ros, *base]
+    restart: on-failure     # 程式出錯結束就重開；compose stop／down 不受影響
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
@@ -41,6 +43,7 @@ services:
       context: ../..
       dockerfile: docker/perception-x86.Dockerfile
     gpus: all
+    restart: on-failure     # 程式出錯結束就重開（重開要重新載入模型）；compose stop／down 不受影響
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
@@ -48,8 +51,9 @@ services:
       - torch-cache:/root/.cache       # rfdetr／torch 下載的檔案，避免每次重抓
     command: [ros2, run, orca_perception, detector]
 
-  # mavros + auv_adapter（/auv_control）。水池測試腳本在這裡面跑：
+  # mavros + auv_adapter（/auv_control）。水池測試腳本、自主流程在這裡面跑：
   #   docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+  #   docker compose exec bridge bash -ic 'python3 /orca/mission/gate_pass.py'    # 過門，要有 detector
   # 第一次用之前，RPi 的 mavproxy 要先加 udpin 14560（deploy/rpi-relay/mavproxy-udpin.sh）
   bridge:
     <<: [*ros, *base]
@@ -57,12 +61,37 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
+      - ../../mission:/orca/mission:ro
       - ./logs/bridge:/logs
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, rpi_relay]
 
+  # 把所有 topic 錄成 rosbag（MCAP），存在 logs/bag/<啟動時間>/，每 5 分鐘切一個檔。
+  # 每次啟動開一個新資料夾；停止（compose stop／down）時送 SIGINT，讓它把檔案收尾。
+  # 原始影像不錄（太大，約 100 GB／小時），改錄 cam_bridge 轉發的原始 JPEG（.../image_raw/compressed）；
+  # /detections/image 也不錄，回放時重跑 detector 就有。
+  recorder:
+    <<: [*ros, *base]
+    restart: on-failure
+    stop_signal: SIGINT
+    stop_grace_period: 15s
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./logs/bag:/bags
+    command:
+      - bash
+      - -c
+      - >-
+        exec ros2 bag record -a -s mcap -d 300
+        -x '^(/camera/camera/color/image_raw|/detections/image)$$'
+        -o /bags/$$(date +%Y%m%d_%H%M%S)
+
   # 臨時工具，不會隨 up 啟動。看畫面（主機先跑 xhost +SI:localuser:root）：
   #   docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections/image
+  # 鍵盤操控：
+  #   docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py
+  # 回放 rosbag（先 docker compose down，避免跟現場的 topic 混在一起）：
+  #   docker compose run --rm tools ros2 bag play /bags/<資料夾>
   tools:
     <<: [*ros, *base]
     profiles: [tools]
@@ -74,6 +103,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
+      - ./logs/bag:/bags:ro
 
 volumes:
   torch-cache:

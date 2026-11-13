@@ -14,7 +14,7 @@
 
 ## 介面
 
-- `/auv_control`（`orca_msgs/AuvControl`）：上層唯一的控制出口，欄位說明在 [`AuvControl.msg`](../src/orca_msgs/msg/AuvControl.msg) 的註解。
+- `/auv_control`（`orca_msgs/AuvControl`）：上層唯一的控制出口，欄位說明在 [`AuvControl.msg`](../src/orca_msgs/msg/AuvControl.msg) 的註解。上層要以 20 Hz 持續發送：adapter 超過 0.5 秒沒收到就改送中位（不切模式、不上鎖）。同一時間只能有一個程式發（鍵盤、水池測試腳本、之後的 `orca_mission` 擇一）。
 - `/auv_adapter/zero`（`std_srvs/Trigger`）：以當下的深度與航向為 0。剛下水、浮在水面時呼叫一次。
 - `/camera/camera/color/image_raw`、`camera_info`：名稱跟 `realsense2_camera` 預設一樣，換相機來源時下游不用改。
 - `/detections`（`vision_msgs/Detection2DArray`）：`class_id` 是類別名稱，例如 `gate`、`red_drum`。

@@ -14,10 +14,10 @@
 """
 from water_common import MAX_DEPTH, format_stats, run, step_stats, wrap
 
-DEPTH = 0.15        # 任務深度（m），上限 MAX_DEPTH
+DEPTH = 0.30        # 任務深度（m），上限 MAX_DEPTH
 SETTLE_S = 15.0     # 下潛後先等深度穩定
 SURGE = 0.2         # 直走的推力（-1 ~ 1）
-FORWARD_S = 3.0     # 每段直走幾秒
+FORWARD_S = 10.0     # 每段直走幾秒
 STOP_S = 3.0        # 直走後停幾秒
 TURN_TIMEOUT = 15.0 # 每一段轉向最多等幾秒
 TURN_SETTLE = 5.0   # 轉到 180 之後再穩定幾秒
@@ -65,10 +65,10 @@ def body(t):
     stats = step_stats([(s, d) for s, d, _ in samples], DEPTH, 0.0, 0.02)
     t.report.append(format_stats(f'下潛 0 → {DEPTH:.2f} m', stats, 'cm', scale=100))
 
-    straight(t, 0.0, '去程直走')
-    turn(t, 90.0, 0.0, '轉到 +90°')
-    turn(t, 180.0, 90.0, '轉到 180°', settle=TURN_SETTLE)
-    straight(t, 180.0, '回程直走')
+    # straight(t, 0.0, '去程直走')
+    # turn(t, 90.0, 0.0, '轉到 +90°')
+    # turn(t, 180.0, 90.0, '轉到 180°', settle=TURN_SETTLE)
+    # straight(t, 180.0, '回程直走')
 
 
 run('water_mission', body)
