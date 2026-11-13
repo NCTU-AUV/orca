@@ -6,9 +6,11 @@
 - 航向：追目標航向，上限 60°/s；深度、前進、平移都是一階延遲
 - 遙測：深度、航向、模式、解鎖狀態 4 Hz（跟實機經 mavproxy 拿到的差不多）
 - 相機：640 px 寬、fx 462（HFOV 約 69°），10 Hz、延遲 0.15 秒；太近（min_range）就偵測不到
-- 「adapter」：DEPTH_HOLD 時馬上切 ALT_HOLD；ALT_HOLD 才能解鎖；沒解鎖時推進器不出力
+- 「adapter」：DEPTH_HOLD 時馬上切 ALT_HOLD；ALT_HOLD 才能解鎖；沒解鎖時推進器不出力；
+  目標航向相對歸零時的航向（加回歸零時的世界航向再給「飛控」）
 座標：x 是起點的正前方，y 是右邊，航向順時針為正。
 """
+import dataclasses
 import math
 
 import py_trees
@@ -148,7 +150,9 @@ class Harness:
                 task = self.runner.running()
                 self.trace.append((self.t, task.name if task else '', out.cmd))
                 if self.armed and self.mode == 'ALT_HOLD':
-                    cmd = out.cmd
+                    # 目標航向是相對歸零時的航向；「飛控」跟 adapter 一樣加回歸零時的世界航向
+                    yaw_zero = -math.degrees(self.vehicle.yaw0) if self.vehicle.yaw0 is not None else 0.0
+                    cmd = dataclasses.replace(out.cmd, target_yaw=wrap(out.cmd.target_yaw + yaw_zero))
             if cmd.surge > 0 and not self.perception.last_seen:
                 self.world.surged_blind = True
             self.world.step(cmd)

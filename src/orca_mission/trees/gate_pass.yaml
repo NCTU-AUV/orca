@@ -1,4 +1,5 @@
-# 過門：跟 mission/gate_pass.py 一樣的流程，改成行為樹。流程圖：gate_pass.md（render_tree 產生）
+# 過門（行為樹）。流程圖：gate_pass.md（render_tree 產生）
+# 跟 mission/gate_pass.py 的差別：不轉向對準。航向從解鎖起就鎖住（歸零時的船頭方向），對準只用左右平移。
 #
 #   ros2 run orca_mission mission gate_pass                   # 實機（會列檢查清單、等 Enter）
 #   ros2 run orca_mission mission gate_pass --no-checklist    # 模擬
@@ -7,8 +8,9 @@
 # 樹結束（成功或失敗）、逾時、Ctrl-C 都會 MANUAL、全 0、DISARM（node.py），船浮上來。
 name: gate_pass
 description: >
-  歸零（浮在水面）→ 解鎖 → 下潛 → 原地轉向對準門 → 鎖航向前進、左右只用 sway 修 →
-  門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。各步的參數跟 mission/gate_pass.py 相同。
+  歸零（浮在水面）→ 解鎖（航向鎖在歸零時的船頭方向）→ 下潛 → 原地用 sway 平移，
+  讓門中心落在船頭正前方（偏離 ≤ 門寬 × center_tol）→ 前進、左右只用 sway 修 →
+  門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。
 
 vars:
   depth: 0.30           # 過門深度 [m]
@@ -16,6 +18,7 @@ vars:
   pass_s: 5.0           # 盲走幾秒（水平沒有定位，只能用時間估）
   labels: [gate, qualification_gate]
   min_score: 0.5
+  center_tol: 0.1       # 平移對準的門檻：船偏離門中線 ≤ 門寬 × center_tol（1.5 m 門 → ±15 cm）
   ready_timeout: 60     # 等飛控、adapter、相機、偵測就緒最多幾秒（模型第一次載入比較久）
 
 root:
@@ -31,7 +34,7 @@ root:
     - type: Confirm
       name: 檢查清單
       checklist:
-        - 船浮在水面、靜止（等一下會以這時的深度和航向當作 0）
+        - 船浮在水面、靜止，船頭正對門（這時的航向會一直鎖到結束，過程中不轉向）
         - 門在相機前方、看得到（/detections/image 有框到門）
         - 繩子綁好，kill switch 在手邊
         - QGC 的 joystick 關閉
@@ -51,10 +54,11 @@ root:
           stable_s: 2.0
           timeout: 40
 
-        - type: AlignTo
-          name: 對準門
+        - type: CenterGate
+          name: 平移對準門
           labels: $labels
           min_score: $min_score
+          tol: $center_tol
 
         - type: ApproachGate
           name: 接近門

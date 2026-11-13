@@ -1,4 +1,7 @@
-"""過門的行為樹（trees/gate_pass.yaml）在平面模型裡跑：情境跟 mission/test_gate_pass.py 一樣。
+"""過門的行為樹（trees/gate_pass.yaml）在平面模型裡跑。
+
+流程：下潛 → 航向鎖住、只用 sway 平移對準（CenterGate）→ 接近 → 盲走 → 停。
+其餘情境（跟丟、逾時、資料中斷）跟 mission/test_gate_pass.py 一樣。
 
     cd src/orca_mission && python3 -m pytest test/
 """
@@ -15,11 +18,11 @@ from orca_mission.task_runner import Mode
 
 TREES = os.path.join(os.path.dirname(__file__), '..', 'trees')
 GATE_PASS = os.path.join(TREES, 'gate_pass.yaml')
-ORDER = ['Dive', 'AlignTo', 'ApproachGate', 'Cruise', 'Hold']
+ORDER = ['Dive', 'CenterGate', 'ApproachGate', 'Cruise', 'Hold']
 
 
 def spec_with(**task_params):
-    """gate_pass.yaml，把某些執行器的參數換掉：spec_with(AlignTo={'tol': 12})。"""
+    """gate_pass.yaml，把某些執行器的參數換掉：spec_with(CenterGate={'tol': 0.5})。"""
     spec = read(GATE_PASS)
 
     def walk(node):
@@ -39,43 +42,70 @@ def assert_passed(h):
     assert abs(w.cross_y) < GATE_W / 2 - 0.3, f'通過時偏離門中心 {w.cross_y:+.2f} m'
     assert not w.surged_blind
     assert h.task_order() == ORDER, h.task_order()
-    # 鎖航向之後目標航向不再變，轉向只發生在 AlignTo
-    assert len({round(c.target_yaw, 6) for t in ('ApproachGate', 'Cruise', 'Hold') for c in h.cmds(t)}) == 1
-    assert all(c.surge == 0 and c.sway == 0 for t in ('Dive', 'AlignTo', 'Hold') for c in h.cmds(t))
+    # 航向從解鎖起就鎖在歸零時的 0°，整個流程都不轉
+    assert {round(c.target_yaw, 6) for t in ORDER for c in h.cmds(t)} == {0.0}
+    assert all(c.surge == 0 and c.sway == 0 for t in ('Dive', 'Hold') for c in h.cmds(t))
+    assert all(c.surge == 0 for c in h.cmds('CenterGate'))      # 對準完才往前
     assert all(c.sway == 0 for c in h.cmds('Cruise'))
     assert all(abs(c.target_depth - 0.30) < 1e-9 for t in ORDER for c in h.cmds(t))
     # 結束：Finish 節點上鎖
     assert h.runner.mode == Mode.FINISH and not h.armed
 
 
+def lateral_when_centered(h):
+    """CenterGate 結束、ApproachGate 開始那一刻，船偏離門中線多少 [m]（船頭方向 = 世界航向）。"""
+    t0 = next(t for t, name, _ in h.trace if name == 'ApproachGate')
+    return h.lateral_at[round(t0, 3)]
+
+
+def run(world, spec=GATE_PASS):
+    h = Harness(world, spec)
+    h.lateral_at = {}
+    step = world.step
+
+    def logged(cmd):        # 記錄每一步「門中心在船頭方向的左右偏離」
+        c, s = math.cos(math.radians(world.yaw)), math.sin(math.radians(world.yaw))
+        dx, dy = world.gate_xy[0] - world.x, world.gate_xy[1] - world.y
+        h.lateral_at[round(h.t, 3)] = -dx * s + dy * c
+        step(cmd)
+    world.step = logged
+    h.run()
+    return h
+
+
 def test_straight_ahead():
-    h = Harness(World(gate_xy=(6.0, 0.0)), GATE_PASS)
-    h.run()
+    h = run(World(gate_xy=(6.0, 0.0)))
     assert_passed(h)
+    assert all(c.sway == 0 for c in h.cmds('CenterGate'))      # 本來就在中線上：不用平移
 
 
-def test_gate_on_the_right_turns_right():
-    h = Harness(World(gate_xy=(6.0, 2.0)), GATE_PASS)
-    h.run()
+def test_gate_on_the_right_sways_right():
+    h = run(World(gate_xy=(6.0, 2.0)))
     assert_passed(h)
-    locked = h.cmds('ApproachGate')[0].target_yaw
-    assert abs(locked - math.degrees(math.atan2(2.0, 6.0))) < 4.0, locked
+    assert max(c.sway for c in h.cmds('CenterGate')) > 0       # 門在右邊 → 往右平移
+    assert abs(lateral_when_centered(h)) <= 0.1 * GATE_W + 0.05
 
 
-def test_gate_on_the_left_and_heading_off():
-    h = Harness(World(gate_xy=(7.0, -1.5), yaw=15.0), GATE_PASS)
-    h.run()
+def test_gate_on_the_left_sways_left():
+    h = run(World(gate_xy=(7.0, -1.5)))
     assert_passed(h)
-    assert h.cmds('ApproachGate')[0].target_yaw < 0      # 相對歸零時（船頭偏右 15°）的航向
+    assert min(c.sway for c in h.cmds('CenterGate')) < 0
+    assert abs(lateral_when_centered(h)) <= 0.1 * GATE_W + 0.05
 
 
-def test_sway_corrects_sideways_drift():
-    """對準容許值很鬆、完全不轉向：靠 sway 拉回來，航向不動。"""
-    h = Harness(World(gate_xy=(8.0, 1.2)), spec_with(AlignTo={'tol': 12.0, 'yaw_gain': 0.0}))
-    h.run()
+def test_heading_off_keeps_heading():
+    """歸零時船頭偏右 10°：不轉回來，照鎖住的航向平移、斜著過門。"""
+    h = run(World(gate_xy=(6.0, 1.0), yaw=10.0))
     assert_passed(h)
-    assert abs(h.cmds('ApproachGate')[0].target_yaw) < 1.0
-    assert max(c.sway for c in h.cmds('ApproachGate')) > 0      # 門在右邊 → 往右移
+    assert abs(h.world.yaw - 10.0) < 1.0
+
+
+def test_center_tol_from_vars():
+    """center_tol 放鬆到 0.5 門寬：還沒完全對準就往前，靠 ApproachGate 的 sway 拉回來。"""
+    h = run(World(gate_xy=(8.0, 0.5)), read(GATE_PASS, {'center_tol': 0.5}))
+    assert_passed(h)
+    assert all(c.sway == 0 for c in h.cmds('CenterGate'))      # 0.5 m < 0.75 m：一開始就算對準
+    assert max(c.sway for c in h.cmds('ApproachGate')) > 0
 
 
 def test_lost_when_close_goes_blind():

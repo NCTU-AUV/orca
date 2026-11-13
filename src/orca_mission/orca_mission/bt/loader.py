@@ -15,7 +15,7 @@
 - 組合：Sequence、Selector（memory 預設 true）、Parallel（policy: all | one）→ children
 - 裝飾：Timeout（seconds）、Retry（times）、Inverter、ForceSuccess → child
 - 任務層節點：WaitReady、Confirm、Zero、Arm、Finish、Seen（bt/behaviours.py）
-- 執行器：Hold、Dive、TurnTo、Cruise、AlignTo、ApproachGate（tasks/）
+- 執行器：Hold、Dive、TurnTo、Cruise、AlignTo、CenterGate、ApproachGate（tasks/）
 任何節點都可以加：
 - name：顯示的名字（預設是 type）
 - timeout: 秒 → 外面包一層 Timeout；retry: 次數 → 再外面包一層 Retry（每次嘗試各自計時）

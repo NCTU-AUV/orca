@@ -2,7 +2,7 @@
 
 <!-- 由 render_tree 從 gate_pass.yaml 產生，不要手改 -->
 
-歸零（浮在水面）→ 解鎖 → 下潛 → 原地轉向對準門 → 鎖航向前進、左右只用 sway 修 → 門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。各步的參數跟 mission/gate_pass.py 相同。
+歸零（浮在水面）→ 解鎖（航向鎖在歸零時的船頭方向）→ 下潛 → 原地用 sway 平移， 讓門中心落在船頭正前方（偏離 ≤ 門寬 × center_tol）→ 前進、左右只用 sway 修 → 門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。
 
 | 變數（-p 覆寫） | 預設 |
 |---|---|
@@ -11,6 +11,7 @@
 | `pass_s` | `5` |
 | `labels` | `gate/qualification_gate` |
 | `min_score` | `0.5` |
+| `center_tol` | `0.1` |
 | `ready_timeout` | `60` |
 
 ```mermaid
@@ -34,7 +35,7 @@ flowchart TD
   n7 -->|1| n8
   n9(["<b>下潛（Dive）</b><br/>depth = 0.3"]):::task
   n8 --> n9
-  n10(["<b>對準門（AlignTo）</b>"]):::task
+  n10(["<b>平移對準門（CenterGate）</b>"]):::task
   n7 -->|2| n10
   n11(["<b>接近門（ApproachGate）</b>"]):::task
   n7 -->|3| n11
