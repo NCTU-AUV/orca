@@ -17,7 +17,7 @@
 - mavros 沒連上或 adapter 沒在跑時不發任何指令；開始發送時的模式沿用飛控目前的模式。
 
 用法（容器內；主機先跑 xhost +SI:localuser:root）：
-  docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py [--gain 0.3] [--max-depth 0.25]
+  docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py [--gain 0.3] [--max-depth 0.25]
 """
 import argparse
 import math

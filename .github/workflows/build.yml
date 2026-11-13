@@ -1,4 +1,4 @@
-# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，檢查 tools、mission 的 Python 語法，跑過門流程的測試
+# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，檢查 tools、mission 的 Python 語法，跑過門流程與行為樹的測試
 name: build
 
 on:
@@ -17,6 +17,14 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py
+        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py sim/gz_camera_bridge.py
       - name: mission tests
         run: python3 mission/test_gate_pass.py
+      # 行為樹：執行器、TaskRunner、YAML 載入、過門流程（平面模型），以及 trees/*.md 跟 YAML 一致
+      - name: orca_mission tests
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends \
+            ros-humble-py-trees python3-pytest python3-yaml
+          source /opt/ros/humble/setup.bash
+          cd src/orca_mission && python3 -m pytest -q test

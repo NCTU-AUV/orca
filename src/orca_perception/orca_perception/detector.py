@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""RF-DETR 偵測節點：訂閱彩色影像，發布偵測框。
+"""RF-DETR 偵測節點：訂閱一或多台相機的彩色影像，發布偵測框。
 
-    訂閱 /camera/camera/color/image_raw   sensor_msgs/Image（rgb8 或 bgr8）
+    訂閱 image_topics                     sensor_msgs/Image（rgb8 或 bgr8），預設：
+           /camera/camera/color/image_raw   前視（D435i）
+           /bottom_camera/image_raw         底部
     發布 /detections                      vision_msgs/Detection2DArray（header 沿用影像的）
-         /detections/image                sensor_msgs/Image（畫好框，給人看）
+         annotated_topics                 sensor_msgs/Image（畫好框，給人看），跟 image_topics 一一對應：
+           /detections/image、/detections/bottom_image
 
-只處理最新的一幀：訂閱佇列深度 1，推論比相機慢時舊幀直接丟掉，延遲不會累積。
+所有相機共用同一個 /detections：用 header.frame_id 分辨是哪一台（每台相機的 frame_id 要不一樣）。
+模型只載入一次，各相機的影像輪流推論；每台只處理最新的一幀（佇列深度 1），
+推論比相機慢時舊幀直接丟掉，延遲不會累積。沒接的相機不會有影像，不影響其他台。
 
 參數：weights（/model/checkpoint_best_total.pth）、threshold（0.4）、
-      image_topic、publish_image（true）
+      image_topics、annotated_topics、publish_image（true）
 """
 
 import time
@@ -34,7 +39,12 @@ class Detector(Node):
         super().__init__('detector')
         weights = self.declare_parameter('weights', '/model/checkpoint_best_total.pth').value
         self.threshold = self.declare_parameter('threshold', 0.4).value
-        topic = self.declare_parameter('image_topic', '/camera/camera/color/image_raw').value
+        topics = list(self.declare_parameter(
+            'image_topics', ['/camera/camera/color/image_raw', '/bottom_camera/image_raw']).value)
+        annotated = list(self.declare_parameter(
+            'annotated_topics', ['/detections/image', '/detections/bottom_image']).value)
+        if len(annotated) != len(topics):
+            raise ValueError('annotated_topics 要跟 image_topics 一樣多')
         self.publish_image = self.declare_parameter('publish_image', True).value
 
         self.get_logger().info(f'loading {weights} ...')
@@ -44,20 +54,21 @@ class Detector(Node):
         self.get_logger().info(f'classes: {self.names}')
 
         self.pub_det = self.create_publisher(Detection2DArray, '/detections', 10)
-        self.pub_img = self.create_publisher(Image, '/detections/image', 1)
         # 深度 1、best effort：推論比相機慢時只留最新一幀。
         # （qos_profile_sensor_data 的深度是 5，會排隊排出約 150 ms 的延遲）
         qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
                          reliability=ReliabilityPolicy.BEST_EFFORT)
-        self.create_subscription(Image, topic, self.on_image, qos)
+        for topic, out in zip(topics, annotated):
+            pub_img = self.create_publisher(Image, out, 1)
+            self.create_subscription(Image, topic, lambda m, p=pub_img: self.on_image(m, p), qos)
 
         self.n = 0
         self.infer_sum = 0.0
         self.lat_sum = 0.0
         self.create_timer(5.0, self.report)
-        self.get_logger().info(f'waiting for images on {topic}')
+        self.get_logger().info(f'waiting for images on {", ".join(topics)}')
 
-    def on_image(self, msg):
+    def on_image(self, msg, pub_img):
         if msg.encoding not in ('rgb8', 'bgr8'):
             self.get_logger().warn(f'unsupported encoding {msg.encoding}', throttle_duration_sec=5)
             return
@@ -86,8 +97,8 @@ class Detector(Node):
             out.detections.append(d)
         self.pub_det.publish(out)
 
-        if self.publish_image and self.pub_img.get_subscription_count() > 0:
-            self.pub_img.publish(self.draw(rgb, det, msg.header))
+        if self.publish_image and pub_img.get_subscription_count() > 0:
+            pub_img.publish(self.draw(rgb, det, msg.header))
 
         self.n += 1
         self.infer_sum += t1 - t0

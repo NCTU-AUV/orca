@@ -9,7 +9,7 @@
 - 影像：/detections（orca_perception）配上 camera_info 的內參 → 門的方位角、水平偏移、門框寬度。
 - 開始前：確認 mavros、adapter、相機、detector 都在跑、飛控上鎖，請使用者確認檢查清單，歸零。
 - 結束時（走完、中止、Ctrl-C、Ctrl-Z、程式出錯都一樣）：送 MANUAL、全 0、DISARM，確認上鎖。
-- 約 20 Hz 記錄到 /logs/<名稱>_<日期_時間>.csv（容器的 /logs 掛到 deploy/<機器>/logs/bridge/）。
+- 約 20 Hz 記錄到 /logs/<名稱>_<日期_時間>.csv（容器的 /logs 掛到 deploy/<機器>/logs/fc_adapter/）。
 
 流程物件要有：first_cmd()、step(now, depth, yaw, gate) → Cmd、phase、result、message、log
 （見 gate_pass.py）。
@@ -277,8 +277,8 @@ def on_ctrl_z(signum, frame):
     raise KeyboardInterrupt
 
 
-def run(name, flow, classes, min_score):
-    """共用的開始與收尾。"""
+def run(name, flow, classes, min_score, checklist=True):
+    """共用的開始與收尾。checklist=False 時不等使用者確認（模擬用）。"""
     signal.signal(signal.SIGTSTP, on_ctrl_z)
     # 不讓 rclpy 處理 Ctrl-C：它預設會先關掉 ROS，結束時的 DISARM 就送不出去
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
@@ -293,10 +293,11 @@ def run(name, flow, classes, min_score):
     try:
         if not ready(t):
             return
-        print('開始前確認：')
-        for item in CHECKLIST:
-            print(f'  - {item}')
-        input('  >>> 都確認了按 Enter（Ctrl-C 取消）')
+        if checklist:
+            print('開始前確認：')
+            for item in CHECKLIST:
+                print(f'  - {item}')
+            input('  >>> 都確認了按 Enter（Ctrl-C 取消）')
         if not t.zero():
             return
         started = True

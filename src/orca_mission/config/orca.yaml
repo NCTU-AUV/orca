@@ -1,0 +1,25 @@
+# orca_mission 的載具設定：相機、指令上限。行為樹本身在 trees/。
+
+# 所有送出的指令最後都經過這些上限（vehicle.py 的 Shaper）
+limits:
+  max_surge: 0.5        # |surge| 上限（-1 ~ 1）
+  max_sway: 0.5
+  max_depth: 3.0        # 目標深度上限 [m]
+  yaw_rate: 30.0        # 目標航向每秒最多變多少度（ArduSub 上限 60°/s；大角度轉向會自動拆成小步）
+
+# /detections 的 header.frame_id 決定偵測來自哪一台相機，所以每台的 frame_id 要不一樣。
+# 內參從 info_topic 讀（相機或轉接節點發布的 camera_info）。
+#   mount_yaw：光軸相對船頭，往右為正 [deg]
+#   mount_pitch：光軸仰角，0 = 前視、-90 = 朝下 [deg]；朝下的相機不算絕對方位
+#   朝下相機的影像：上方 = 船頭、右方 = 右舷（sim/models/orca_cam 照這個方向裝）
+cameras:
+  front:
+    frame_id: camera_color_optical_frame        # realsense2_camera、cam_bridge、模擬都用這個
+    info_topic: /camera/camera/color/camera_info
+    mount_yaw: 0.0
+    mount_pitch: 0.0
+  bottom:
+    frame_id: bottom_camera_optical_frame
+    info_topic: /bottom_camera/camera_info
+    mount_yaw: 0.0
+    mount_pitch: -90.0

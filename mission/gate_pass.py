@@ -10,9 +10,10 @@
   5. STOP      停 stop_s 秒 → 上鎖（浮上來）
 任何一步逾時、或遠距離跟丟等不回來：中止，上鎖。
 
-用法（bridge 容器內，cam_bridge、detector、bridge 都要在跑）：
+用法（fc_adapter 容器內，front_camera、object_detector、fc_adapter 都要在跑）：
     python3 /orca/mission/gate_pass.py [--depth 0.30] [--surge 0.2] [--pass-s 5] [--classes gate,qualification_gate]
   其餘參數改下面的 Params。任何時候 Ctrl-C：上鎖，船浮上來。
+行為樹版的同一個流程：src/orca_mission/trees/gate_pass.yaml（deploy/*/mission.sh）。
 
 介面（見 runner.py）：控制只發 /auv_control；深度、航向跟 auv_adapter 讀同樣的 mavros topic
 （只讀），零點跟 adapter 同時記，所以讀到的 yaw 可以直接當 target_yaw 送回去；
@@ -230,13 +231,16 @@ def main():
     ap.add_argument('--classes', default='gate,qualification_gate',
                     help='當作門的偵測類別，逗號分隔；同一幀有多個時取分數最高的')
     ap.add_argument('--min-score', type=float, default=0.5, help='低於這個分數的偵測不用')
+    ap.add_argument('--no-checklist', action='store_true',
+                    help='不列檢查清單、不等 Enter，直接開始（只在模擬用）')
     args = ap.parse_args()
     if not (0.0 < args.depth and 0.0 < args.surge <= 1.0 and args.pass_s >= 0.0):
         ap.error('depth 要大於 0，surge 要在 0 ~ 1，pass-s 不能是負的')
 
     from runner import run      # 這裡才 import：上面的流程不需要 ROS
     flow = GatePass(Params(depth=args.depth, surge=args.surge, pass_s=args.pass_s))
-    run('gate_pass', flow, classes=args.classes.split(','), min_score=args.min_score)
+    run('gate_pass', flow, classes=args.classes.split(','), min_score=args.min_score,
+        checklist=not args.no_checklist)
 
 
 if __name__ == '__main__':

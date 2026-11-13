@@ -15,8 +15,13 @@ all=()
 cleanup() { kill "${all[@]}" 2>/dev/null || true; wait || true; }
 trap cleanup EXIT INT TERM
 
-# 1. Gazebo server（-r：載入後立刻開始跑）
-gz sim -s -r -v 3 "/sim/worlds/${WORLD}" &
+# 1. Gazebo server（-r：載入後立刻開始跑）。
+#    不開 GUI 時相機用 EGL 算圖（--headless-rendering），不需要 X；世界裡沒有相機時沒有影響
+server_args=()
+if [[ "${GUI}" != "1" ]]; then
+  server_args+=(--headless-rendering)
+fi
+gz sim -s -r -v 3 "${server_args[@]}" "/sim/worlds/${WORLD}" &
 core+=($!); all+=($!)
 
 if [[ "${GUI}" == "1" ]]; then

@@ -6,7 +6,7 @@ ROS 2 節點全部跑在筆電，RPi 不跑 ROS，只負責把相機和飛控「
              RPi（不跑 ROS）                         筆電（deploy/laptop，ROS 2 Humble）
  D435i ─USB─> cam-relay  ──TCP 5600（筆電主動連）──> cam_bridge ─> /camera/camera/color/image_raw
                                                                        └> detector ─> /detections
- CUAV V5 ─USB─> mavproxy ──UDP 14560（udpin，筆電主動送）──> bridge（mavros + auv_adapter）
+ CUAV V5 ─USB─> mavproxy ──UDP 14560（udpin，筆電主動送）──> fc_adapter（mavros + auv_adapter）
                  └> bcast-relay → QGC（14550 廣播，不變）
 ```
 
@@ -35,25 +35,27 @@ scp mavproxy-udpin.sh rpi: && ssh -t rpi sudo bash mavproxy-udpin.sh   # mavprox
 ```bash
 ml/rfdetr/fetch_weights.sh                 # 第一次
 cd deploy/laptop
-docker compose up -d cam_bridge detector   # 影像與偵測
-docker compose up -d bridge                # 飛控（RPi 的 mavproxy 要先加 udpin）
+docker compose up -d front_camera object_detector   # 影像與偵測
+docker compose up -d fc_adapter                     # 飛控（RPi 的 mavproxy 要先加 udpin）
 docker compose up -d recorder              # 所有 topic 錄成 rosbag → logs/bag/（docker compose up -d 會一起起）
-docker compose logs -f detector            # 每 5 秒印 fps 與延遲
+docker compose logs -f object_detector             # 每 5 秒印 fps 與延遲
 
 # 看偵測畫面（主機先跑 xhost +SI:localuser:root）
-docker compose run --rm tools ros2 run rqt_image_view rqt_image_view /detections/image
+docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /detections/image
 
 # 水池測試腳本
-docker compose exec bridge bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
 
 # 鍵盤操控（主機先跑 xhost +SI:localuser:root）。按鍵與安全機制見 tools/teleop/keyboard.py 檔頭
-docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py
+docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
 
-# 過門：一個指令起三個服務、等飛控／相機／偵測就緒、開始 mission/gate_pass.py（解鎖前會等你按 Enter）
+# 過門（行為樹，src/orca_mission/trees/gate_pass.yaml）：起服務、等就緒、跑行為樹（解鎖前會等你按 Enter）
+./mission.sh
+# 舊版過門（mission/gate_pass.py）
 ./gate_pass.sh
 ```
 
-上岸檢查飛控連線（不要解鎖）：`docker compose exec bridge bash -ic 'ros2 topic echo --once /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。
+上岸檢查飛控連線（不要解鎖）：`docker compose exec fc_adapter bash -ic 'ros2 topic echo --once /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。
 
 ## 實測數字（2026-11-12）
 
@@ -71,4 +73,4 @@ docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py
 ## 風險
 
 - 控制要經過這條 USB 網卡和筆電，斷線時只能靠 ArduSub 的 failsafe（`FS_PILOT_TIMEOUT`、GCS failsafe），這些還沒設好。
-- RPi 上原本的 mavros 容器停用後，`water_*.py` 改在筆電的 bridge 容器裡跑。
+- RPi 上原本的 mavros 容器停用後，`water_*.py` 改在筆電的 fc_adapter 容器裡跑。
