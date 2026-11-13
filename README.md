@@ -80,7 +80,7 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 - 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh` 已經跑過。
 - 測試腳本和過門都會先列檢查清單、歸零（以浮在水面時的深度與航向為 0）。任何時候 Ctrl-C 都會上鎖，船浮上來。
 - 紀錄 CSV 存在 `deploy/<跑法>/logs/fc_adapter/`（測試腳本、舊版過門）與 `deploy/<跑法>/logs/mission/`（行為樹）。
-- 實機跑 `docker compose up -d`、`./mission.sh` 或 `./gate_pass.sh` 時，`recorder` 會把所有 topic（mavros、`/auv_control`、`/detections`、相機 JPEG、`/rosout` 的節點 log）錄成 rosbag，存在 `deploy/laptop/logs/bag/<啟動時間>/`，每 5 分鐘切一個 `.mcap` 檔，約 3 GB／小時。原始影像與 `/detections/image` 不錄。用 Foxglove 直接開 `.mcap`，或 `docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>` 回放（先 `docker compose down`）。
+- 實機跑 `docker compose up -d`、`./mission.sh` 或 `./gate_pass.sh` 時，`recorder` 會把所有 topic（mavros、`/auv_control`、`/detections`、相機 JPEG、`/rosout` 的節點 log）錄成 rosbag，存在 `deploy/laptop/logs/bag/<啟動時間>/`，每 5 分鐘切一個 `.mcap` 檔，約 3 GB／小時。原始影像不錄，畫好框的影像錄 JPEG 版（`/detections/image/compressed`）。模擬每次 `./mission.sh` 錄一個 bag，見 [docs/sim/README.md](docs/sim/README.md)。用 Foxglove 直接開 `.mcap`，或 `docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>` 回放（先 `docker compose down`）。
 
 ### 其他
 

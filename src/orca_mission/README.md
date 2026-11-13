@@ -25,7 +25,8 @@ deploy/laptop/mission.sh gate_pass -p depth=0.5 -p pass_s=6    # -p 覆寫樹的
 - 終端機每 0.5 秒印一行：目前的節點、深度、航向、指令、執行器的回饋。
 - `/mission/status`（`std_msgs/String`，JSON，2 Hz）。
 - 即時看整棵樹每個節點的狀態：`docker compose --profile mission run --rm mission py-trees-tree-watcher`。
-- CSV（20 Hz）：`deploy/<機器>/logs/mission/<樹>_<時間>.csv`。
+- CSV（20 Hz）：`deploy/<機器>/logs/mission/<樹>_<時間>.csv`（`--run-name` 可以指定檔名）。
+- rosbag（MCAP，Foxglove 直接開）：模擬每次 `deploy/sim/mission.sh` 錄一個，在 `deploy/sim/logs/bag/<樹>_<時間>/`，跟 CSV 同名，影像只有畫好框的 JPEG；實機由 `recorder` 服務錄在 `deploy/laptop/logs/bag/<啟動時間>/`。
 
 ## 架構
 

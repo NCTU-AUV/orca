@@ -1,0 +1,230 @@
+{
+  "configById": {
+    "Image!front": {
+      "imageMode": {
+        "imageTopic": "/detections/image/compressed"
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "synchronize": false
+    },
+    "Image!bottom": {
+      "imageMode": {
+        "imageTopic": "/detections/bottom_image/compressed"
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "synchronize": false
+    },
+    "StateTransitions!mission": {
+      "paths": [
+        {
+          "value": "/studio_script/mission.node",
+          "timestampMethod": "receiveTime",
+          "label": "行為樹節點"
+        },
+        {
+          "value": "/studio_script/mission.fc_mode",
+          "timestampMethod": "receiveTime",
+          "label": "飛控模式"
+        },
+        {
+          "value": "/studio_script/mission.armed",
+          "timestampMethod": "receiveTime",
+          "label": "解鎖"
+        },
+        {
+          "value": "/studio_script/gate.seen",
+          "timestampMethod": "receiveTime",
+          "label": "前視看到門"
+        }
+      ],
+      "isSynced": true
+    },
+    "Plot!gate": {
+      "paths": [
+        {
+          "value": "/studio_script/gate.lateral",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "偏離門中線（門寬）：CenterGate 在 ±0.1 內算對準",
+          "color": "#4e9a06"
+        },
+        {
+          "value": "/studio_script/gate.width",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "門框寬／畫面寬：ApproachGate 到 0.7 開始盲走",
+          "color": "#c4a000"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!depth": {
+      "paths": [
+        {
+          "value": "/studio_script/mission.depth",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "深度 [m]（歸零後，2 Hz）",
+          "color": "#3465a4"
+        },
+        {
+          "value": "/auv_control.target_depth",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "目標深度 [m]",
+          "color": "#ef2929"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!thrust": {
+      "paths": [
+        {
+          "value": "/auv_control.surge",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "surge（前 +）",
+          "color": "#75507b"
+        },
+        {
+          "value": "/auv_control.sway",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "sway（右 +）",
+          "color": "#f57900"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!heading": {
+      "paths": [
+        {
+          "value": "/studio_script/mission.heading",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "航向 [deg]（歸零後，2 Hz）",
+          "color": "#3465a4"
+        },
+        {
+          "value": "/auv_control.target_yaw",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "目標航向 [deg]",
+          "color": "#ef2929"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "RawMessages!mission": {
+      "topicPath": "/studio_script/mission",
+      "fontSize": 12,
+      "defaultExpanded": true
+    },
+    "RawMessages!mavros_state": {
+      "topicPath": "/mavros/state",
+      "fontSize": 12,
+      "defaultExpanded": true
+    },
+    "RosOut!log": {
+      "searchTerms": [],
+      "minLogLevel": 1,
+      "topicToRender": "/rosout"
+    },
+    "Tab!orca_mission": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "過門",
+          "layout": {
+            "first": {
+              "first": "Image!front",
+              "second": "Image!bottom",
+              "direction": "column",
+              "splitPercentage": 62
+            },
+            "second": {
+              "first": "StateTransitions!mission",
+              "second": {
+                "first": "Plot!gate",
+                "second": {
+                  "first": "Plot!depth",
+                  "second": "Plot!thrust",
+                  "direction": "column",
+                  "splitPercentage": 50
+                },
+                "direction": "column",
+                "splitPercentage": 34
+              },
+              "direction": "column",
+              "splitPercentage": 28
+            },
+            "direction": "row",
+            "splitPercentage": 50
+          }
+        },
+        {
+          "title": "飛控、log",
+          "layout": {
+            "first": {
+              "first": "Plot!heading",
+              "second": "RawMessages!mission",
+              "direction": "column",
+              "splitPercentage": 45
+            },
+            "second": {
+              "first": "RawMessages!mavros_state",
+              "second": "RosOut!log",
+              "direction": "column",
+              "splitPercentage": 35
+            },
+            "direction": "row",
+            "splitPercentage": 50
+          }
+        }
+      ]
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {
+    "orca-mission-status": {
+      "name": "mission（/mission/status → 欄位）",
+      "sourceCode": "// Foxglove User Script：把 /mission/status（std_msgs/String，內容是 JSON，2 Hz）拆成欄位，\n// 讓 Plot、State Transitions 可以直接用。欄位對應 src/orca_mission/orca_mission/node.py 的 on_status。\n// 改了這個檔要重新產生 layout：python3 tools/foxglove/make_layout.py\nimport { Input } from \"./types\";\n\nexport const inputs = [\"/mission/status\"];\nexport const output = \"/studio_script/mission\";\n\ntype Output = {\n  node: string; // 行為樹目前的節點（樹裡的 name，例如「平移對準門」）\n  feedback: string; // 執行器的回饋\n  tree: string; // 整棵樹的狀態：RUNNING、SUCCESS、FAILURE、INVALID\n  runner: string; // TaskRunner：IDLE（不送）、ACTIVE（DEPTH_HOLD + 目標）、FINISH（上鎖）\n  fc_mode: string; // 飛控回報的模式\n  armed: boolean;\n  depth: number; // 深度 [m]，歸零後、往下為正\n  heading: number; // 航向 [deg]，歸零後\n  surge: number;\n  sway: number;\n  target_depth: number;\n  target_yaw: number;\n};\n\nfunction num(v: unknown): number {\n  return typeof v === \"number\" ? v : NaN;\n}\n\nexport default function script(event: Input<\"/mission/status\">): Output | undefined {\n  let s: any;\n  try {\n    s = JSON.parse(event.message.data);\n  } catch {\n    return undefined;\n  }\n  const cmd = s.cmd ?? {};\n  return {\n    node: String(s.node ?? \"\"),\n    feedback: String(s.feedback ?? \"\"),\n    tree: String(s.status ?? \"\"),\n    runner: String(s.runner ?? \"\"),\n    fc_mode: String(s.fc_mode ?? \"\"),\n    armed: s.armed === true,\n    depth: num(s.depth),\n    heading: num(s.heading),\n    surge: num(cmd.surge),\n    sway: num(cmd.sway),\n    target_depth: num(cmd.target_depth),\n    target_yaw: num(cmd.target_yaw),\n  };\n}\n"
+    },
+    "orca-gate": {
+      "name": "gate（/detections → 門的偏離、框寬）",
+      "sourceCode": "// Foxglove User Script：從 /detections 算前視相機裡門的位置，跟 orca_mission 過門用的量相同\n// （src/orca_mission/orca_mission/perception.py、tasks/gate.py）：\n//   offset_x：門框中心在畫面的水平位置，中央 0、右緣 +1、左緣 -1\n//   width：門框寬 / 畫面寬。ApproachGate 到 near_width（0.7）就開始盲走\n//   lateral：offset_x / (2 × width) = 船偏離門中線幾個門寬。CenterGate 在 ±tol（0.1）內算對準\n// 只看前視相機（frame_id camera_color_optical_frame），標籤 gate／qualification_gate、分數 ≥ 0.5 裡最高的一個。\n// 前視的每一幀都輸出一筆；這一幀沒有門時 seen = false、數值是 NaN（曲線會斷開）。\n// 改了這個檔要重新產生 layout：python3 tools/foxglove/make_layout.py\nimport { Input } from \"./types\";\n\nexport const inputs = [\"/detections\", \"/camera/camera/color/camera_info\"];\nexport const output = \"/studio_script/gate\";\n\nconst FRAME_ID = \"camera_color_optical_frame\";\nconst LABELS = [\"gate\", \"qualification_gate\"];\nconst MIN_SCORE = 0.5;\n\ntype Output = {\n  seen: boolean;\n  label: string;\n  score: number;\n  offset_x: number;\n  width: number;\n  lateral: number;\n};\n\n// 內參從 camera_info 來；還沒收到時用模擬前視相機的 640 寬、光心在正中央\nlet imageWidth = 640;\nlet cx = 320;\n\nexport default function script(\n  event: Input<\"/detections\"> | Input<\"/camera/camera/color/camera_info\">,\n): Output | undefined {\n  if (event.topic === \"/camera/camera/color/camera_info\") {\n    const info = event.message;\n    const k02 = info.k[2] ?? 0; // 光心 cx\n    if (info.width > 0 && k02 > 0) {\n      imageWidth = info.width;\n      cx = k02;\n    }\n    return undefined;\n  }\n  const msg = event.message;\n  if (msg.header.frame_id !== FRAME_ID) {\n    return undefined;\n  }\n  let best: { label: string; score: number; u: number; w: number } | undefined;\n  for (const d of msg.detections) {\n    const h = d.results[0]?.hypothesis;\n    if (h == undefined || !LABELS.includes(h.class_id) || h.score < MIN_SCORE) {\n      continue;\n    }\n    if (best == undefined || h.score > best.score) {\n      best = { label: h.class_id, score: h.score, u: d.bbox.center.position.x, w: d.bbox.size_x };\n    }\n  }\n  if (best == undefined) {\n    return { seen: false, label: \"\", score: NaN, offset_x: NaN, width: NaN, lateral: NaN };\n  }\n  const offset = (best.u - cx) / (imageWidth / 2);\n  const width = best.w / imageWidth;\n  return {\n    seen: true,\n    label: best.label,\n    score: best.score,\n    offset_x: offset,\n    width,\n    lateral: width > 0 ? offset / (2 * width) : NaN,\n  };\n}\n"
+    }
+  },
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": "Tab!orca_mission"
+}

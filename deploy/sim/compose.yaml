@@ -4,13 +4,15 @@
 # 過門（有門、相機、偵測的世界）：
 #   ./mission.sh                  行為樹版（src/orca_mission/trees/gate_pass.yaml，mission 服務）
 #   ./gate_pass.sh                舊版（mission/gate_pass.py，在 fc_adapter 容器裡跑）
-#   sim_cameras、object_detector 在 vision profile、mission 在 mission profile，平常的 ./run.sh 不會起它們
+#   sim_cameras、object_detector 在 vision profile、recorder 在 record profile、mission 在 mission profile，
+#   平常的 ./run.sh 不會起它們
 #
 # 服務：
 #   simulator        Gazebo + ArduSub SITL + mavproxy
 #   fc_adapter       飛控介面：mavros + auv_adapter（/auv_control → ArduSub）。程式不改
 #   sim_cameras      Gazebo 的前視、底部相機 → ROS 影像（topic、frame_id 同實機）
-#   object_detector  RF-DETR：影像 → /detections
+#   object_detector  RF-DETR：影像 → /detections、畫好框的影像（原始、JPEG）
+#   recorder         每次任務錄一個 rosbag（MCAP），影像只錄畫好框的 JPEG
 #   mission          行為樹決策層（orca_mission）：/detections + mavros 狀態 → /auv_control
 #   gui_tools        鍵盤操控等臨時工具
 name: orca-sitl
@@ -121,6 +123,34 @@ services:
       - ../../ml/rfdetr/weights:/model:ro
       - torch-cache:/root/.cache
     command: [ros2, run, orca_perception, detector]
+
+  # 把 topic 錄成 rosbag（MCAP），一個資料夾一次任務：./mission.sh 跑樹前開、樹結束後停，
+  # 存在 logs/bag/<樹>_<時間>/，跟 logs/mission/<樹>_<時間>.csv 同名（RECORD=0 ./mission.sh 不錄）。
+  # 影像只錄畫好框的 JPEG（/detections/image/compressed、/detections/bottom_image/compressed），
+  # 相機的原始影像（含其他壓縮格式）、畫好框的原始影像都不錄，一次過門（約 30 秒）約 12 MB。
+  # 單獨錄（不經 mission.sh）：BAG_NAME=名稱 docker compose --profile record up -d recorder；
+  # 停止用 docker compose stop recorder（送 SIGINT，讓它把檔案收尾）。用 Foxglove 直接開 .mcap。
+  recorder:
+    image: orca-base              # 跟 fc_adapter 同一個 image（mission.sh 會先 build）
+    profiles: [record]
+    network_mode: host
+    ipc: host
+    init: true
+    stop_signal: SIGINT
+    stop_grace_period: 15s
+    environment:
+      <<: *ros-env
+      BAG_NAME: ${BAG_NAME:-}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./logs/bag:/bags
+    command:
+      - bash
+      - -c
+      - >-
+        exec ros2 bag record -a -s mcap
+        -x '^(/camera/camera/color/image_raw.*|/bottom_camera/image_raw.*|/detections/image|/detections/bottom_image)$$'
+        -o /bags/$${BAG_NAME:-$$(date +%Y%m%d_%H%M%S)}
 
   # 行為樹決策層。不隨 up 啟動，用 ./mission.sh 或：
   #   docker compose --profile mission run --rm mission mission smoke_test --no-checklist

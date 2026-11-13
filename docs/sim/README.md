@@ -8,6 +8,60 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 
 飛控韌體、飛控參數、mavros 設定、adapter 程式都與實機相同；船的物理（推進器、浮力、阻力）由 Gazebo 模擬。設計與規格見 [plan.md](plan.md)，開發中遇到的特別事項見 [notes.md](notes.md)。
 
+## 快速開始
+
+指令都在 `deploy/sim/` 底下執行（`cd deploy/sim`）。第一次會 build image、下載偵測模型權重，要等比較久；主機需求見[需求](#需求)。
+
+**跑任務（行為樹）**：`./mission.sh` 一個指令從起模擬、等就緒、錄 rosbag 到跑完行為樹都包了，不用先跑 `./run.sh`。
+
+```bash
+./mission.sh                                         # 過門：資格賽門（orca_qgate.sdf），開 Gazebo 視窗
+GUI=0 ./mission.sh                                   # 不開 Gazebo 視窗
+./mission.sh gate_pass -p depth=0.5 -p pass_s=6      # -p 覆寫樹的 vars（depth、surge、pass_s、min_score、center_tol、ready_timeout）
+WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門：橫桿在水下 0.6 m，要潛深一點
+WORLD=orca_pool.sdf ./mission.sh smoke_test          # 動作測試（下潛、轉向、前進），不需要門和相機
+RECORD=0 ./mission.sh                                # 不錄 rosbag
+./gate_pass.sh                                       # 舊版過門（狀態機 mission/gate_pass.py）
+```
+
+- 每次執行都會重開 `simulator`，船回到水面、原點；其他服務沿用已經在跑的。要重跑就再執行一次。
+- 任何時候 Ctrl-C：上鎖、船浮上來，rosbag 也會收尾。
+- 紀錄：`logs/mission/<樹>_<時間>.csv`、`logs/bag/<樹>_<時間>/`（用 Foxglove 開裡面的 `.mcap`）。
+- 細節見[過門](#過門有門相機偵測)；樹的寫法與參數見 [`src/orca_mission`](../../src/orca_mission/README.md)。
+
+**只起模擬（跑水池測試程式、鍵盤操控）**：
+
+```bash
+./run.sh                       # simulator + fc_adapter，前景執行，Ctrl-C 結束
+GUI=0 ./run.sh                 # 不開 Gazebo 視窗
+WORLD=orca_qgate.sdf ./run.sh  # 換 sim/worlds/ 底下的世界檔（預設 orca_pool.sdf）
+```
+
+起來約 5 秒後 EKF 對準，就可以另開終端機（同樣在 `deploy/sim/`）：
+
+```bash
+docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'   # 定深測試，模擬裡檢查清單直接按 Enter
+docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py                  # 鍵盤操控
+```
+
+同一時間只能有一個程式發 `/auv_control`（測試程式、鍵盤、行為樹擇一）。
+
+**跑的時候看狀態**（另開終端機，在 `deploy/sim/`）：
+
+```bash
+docker compose --profile mission run --rm mission py-trees-tree-watcher   # 即時看整棵樹每個節點的狀態
+docker compose logs -f fc_adapter         # mavros、auv_adapter
+docker compose logs -f object_detector    # 偵測，每 5 秒印 fps 與推論時間
+```
+
+主機上開 QGroundControl 會自動連上（UDP 14550），joystick 要關掉。
+
+**全部關掉**：
+
+```bash
+docker compose --profile vision down
+```
+
 ## 需求
 
 | 項目 | 說明 |
@@ -79,7 +133,14 @@ WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
 WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉向、前進），不需要門
 ```
 
-一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator`（船回到水面、原點）→ 等 EKF 對準、飛控連線、偵測都就緒 → 用 `mission` 服務跑行為樹（`--no-checklist`）。紀錄在 `deploy/sim/logs/mission/`。
+一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator`（船回到水面、原點）→ 等 EKF 對準、飛控連線、偵測都就緒 → 開始錄 rosbag → 用 `mission` 服務跑行為樹（`--no-checklist`）→ 樹結束（含 Ctrl-C）後停止錄影。
+
+每次執行的紀錄同名，`<樹>_<時間>`：
+
+- `deploy/sim/logs/mission/<樹>_<時間>.csv`：行為樹的紀錄（20 Hz）。
+- `deploy/sim/logs/bag/<樹>_<時間>/`：rosbag（MCAP），用 [Foxglove](https://foxglove.dev) 直接開裡面的 `.mcap`。錄了 mavros、`/auv_control`、`/detections`、`/mission/status`（目前的節點與回饋）、`/rosout` 等全部 topic；**影像只錄畫好框的 JPEG**（`/detections/image/compressed`、`/detections/bottom_image/compressed`），相機的原始影像不錄。一次過門（約 30 秒）約 12 MB。
+- 不想錄：`RECORD=0 ./mission.sh`。錄影設定在 `compose.yaml` 的 `recorder` 服務。
+- Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/orca_mission.json)（Foxglove 右上角的 layout 選單 → Import from file）。分頁「過門」有前視、底部畫好框的影像，行為樹節點／飛控模式／解鎖／有沒有看到門，門的偏離與框寬、深度、推力；分頁「飛控、log」有航向、`/mavros/state`、`/rosout`。`/mission/status` 是 JSON 字串，layout 裡帶的 User Script（`tools/foxglove/*.ts`）會把它和 `/detections` 拆成欄位。改了之後用 `python3 tools/foxglove/make_layout.py` 重新產生。
 
 舊版（狀態機 [`mission/gate_pass.py`](../../mission/gate_pass.py)，參數直接交給它）：
 
@@ -129,6 +190,7 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 | `deploy/sim/logs/sim/mavproxy/` | mavproxy 的 tlog |
 | `deploy/sim/logs/fc_adapter/*.csv` | 測試程式、舊版過門的紀錄 |
 | `deploy/sim/logs/mission/*.csv` | 行為樹的紀錄 |
+| `deploy/sim/logs/bag/<樹>_<時間>/` | `./mission.sh` 每次執行錄的 rosbag（MCAP，影像只有畫好框的 JPEG），跟 CSV 同名 |
 
 ## 已知問題與限制
 
@@ -171,6 +233,7 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 | `sim/models/orca_cam/`、`gate/`、`q_gate/` | Orca + 前視相機、導航門、資格賽門 |
 | `sim/gz_camera_bridge.py` | Gazebo 前視、底部相機 → ROS 影像（`sim_cameras` 服務） |
 | `deploy/sim/mission.sh` | 一個指令跑行為樹（預設過門） |
+| `tools/foxglove/` | 看 rosbag 用的 Foxglove layout（`orca_mission.json`，由 `make_layout.py` 產生） |
 | `deploy/sim/gate_pass.sh` | 一個指令跑舊版過門 |
 | `src/orca_bridge/` | mavros + `auv_adapter.py`，跟實機共用 |
 | `tools/pool_tests/` | 水池測試腳本 |

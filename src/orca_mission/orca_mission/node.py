@@ -289,6 +289,8 @@ def main(argv=None):
     ap.add_argument('--no-checklist', action='store_true', help='不列檢查清單、不等 Enter（只在模擬用）')
     ap.add_argument('--config', help='相機與限幅設定（預設 config/orca.yaml）')
     ap.add_argument('--log-dir', default=os.environ.get('ORCA_LOG_DIR', '/logs'))
+    ap.add_argument('--run-name', help='紀錄檔名（不含 .csv），預設 <樹>_<時間>；'
+                                       'deploy/sim/mission.sh 用它讓 CSV 跟 rosbag 同名')
     ap.add_argument('--print-tree', action='store_true', help='只印出樹的結構，不執行')
     args = ap.parse_args(argv if argv is not None else rclpy.utilities.remove_ros_args(sys.argv)[1:])
 
@@ -308,7 +310,8 @@ def main(argv=None):
     # 不讓 rclpy 處理 Ctrl-C：它預設會先關掉 ROS，收尾的 DISARM 就送不出去
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     os.makedirs(args.log_dir, exist_ok=True)
-    log_path = os.path.join(args.log_dir, time.strftime(f'{spec.get("name", "mission")}_%Y%m%d_%H%M%S.csv'))
+    run_name = args.run_name or time.strftime(f'{spec.get("name", "mission")}_%Y%m%d_%H%M%S')
+    log_path = os.path.join(args.log_dir, f'{run_name}.csv')
     node = MissionNode(spec, cameras, limits, not args.no_checklist, log_path)
     executor = SingleThreadedExecutor()
     executor.add_node(node)

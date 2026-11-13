@@ -45,7 +45,7 @@ services:
       - ../../src:/opt/orca_ws/src:ro
     command: [ros2, run, orca_cam_bridge, cam_bridge, --ros-args, -p, "host:=${RPI_HOST:-10.42.0.1}"]
 
-  # RF-DETR：影像 → /detections（vision_msgs/Detection2DArray）、/detections/image（畫好框）
+  # RF-DETR：影像 → /detections（vision_msgs/Detection2DArray）、/detections/image（畫好框；.../compressed 是 JPEG）
   # 權重先跑 ml/rfdetr/fetch_weights.sh 下載
   object_detector:
     <<: *ros
@@ -80,7 +80,7 @@ services:
   # 把所有 topic 錄成 rosbag（MCAP），存在 logs/bag/<啟動時間>/，每 5 分鐘切一個檔。
   # 每次啟動開一個新資料夾；停止（compose stop／down）時送 SIGINT，讓它把檔案收尾。
   # 原始影像不錄（太大，約 100 GB／小時），改錄 front_camera 轉發的原始 JPEG（.../image_raw/compressed）；
-  # 畫好框的影像也不錄，回放時重跑 object_detector 就有。底部相機的原始影像同樣不錄。
+  # 畫好框的影像錄 object_detector 發的 JPEG（/detections/image/compressed），原始的不錄。底部相機的原始影像同樣不錄。
   recorder:
     <<: [*ros, *base]
     restart: on-failure
