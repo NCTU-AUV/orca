@@ -15,7 +15,7 @@ description: >
 vars:
   depth: 0.30           # 過門深度 [m]
   surge: 0.2            # 前進推力
-  pass_s: 5.0           # 盲走幾秒（水平沒有定位，只能用時間估）
+  pass_s: 9.0           # 盲走幾秒（水平沒有定位，只能用時間估）
   labels: [gate, qualification_gate]
   min_score: 0.5
   center_tol: 0.1       # 平移對準的門檻：船偏離門中線 ≤ 門寬 × center_tol（1.5 m 門 → ±15 cm）

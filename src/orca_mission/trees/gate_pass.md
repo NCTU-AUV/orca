@@ -8,7 +8,7 @@
 |---|---|
 | `depth` | `0.3` |
 | `surge` | `0.2` |
-| `pass_s` | `5` |
+| `pass_s` | `9` |
 | `labels` | `gate/qualification_gate` |
 | `min_score` | `0.5` |
 | `center_tol` | `0.1` |
@@ -39,7 +39,7 @@ flowchart TD
   n7 -->|2| n10
   n11(["<b>接近門（ApproachGate）</b>"]):::task
   n7 -->|3| n11
-  n12(["<b>盲走過門（Cruise）</b><br/>seconds = 5"]):::task
+  n12(["<b>盲走過門（Cruise）</b><br/>seconds = 9"]):::task
   n7 -->|4| n12
   n13(["<b>停（Hold）</b>"]):::task
   n7 -->|5| n13
