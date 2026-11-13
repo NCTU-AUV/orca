@@ -51,6 +51,9 @@ services:
     build:
       context: ../..
       dockerfile: docker/base.Dockerfile
+      # build 指紋（docker/build-hash.sh 算的），跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+      labels:
+        orca.build-hash: ${ORCA_BASE_HASH:-}
     network_mode: host            # 收 mavproxy 送到 127.0.0.1:14551 的封包
     ipc: host
     init: true
@@ -110,6 +113,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/perception-x86.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_PERCEPTION_HASH:-}
     profiles: [vision]
     network_mode: host
     ipc: host
@@ -162,6 +167,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/mission.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_MISSION_HASH:-}
     profiles: [mission]
     network_mode: host
     ipc: host

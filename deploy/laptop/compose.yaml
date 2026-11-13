@@ -3,8 +3,9 @@
 #   飛控：RPi mavproxy（UDP 14560，udpin）↔ fc_adapter 裡的 mavros
 # 兩條連線都由筆電主動發起，筆電不用開防火牆。所有節點在同一台，ROS_LOCALHOST_ONLY=1，DDS 不出網路。
 #
-#   docker compose up -d                          # front_camera、object_detector、fc_adapter；recorder、mission 不會起
-#   ./mission.sh                                  # 行為樹版過門（mission 服務），跑樹時才錄 rosbag；解鎖前會等你按 Enter
+#   ./up.sh                                       # 起 front_camera、object_detector、fc_adapter，等就緒；映像不存在或過期才 build，已經在跑的不重開
+#   docker compose up -d                          # 同上三個服務（不等就緒）；recorder、mission 不會起
+#   ./mission.sh                                  # 行為樹版過門（mission 服務，會先跑 ./up.sh），跑樹時才錄 rosbag；解鎖前會等你按 Enter
 #   ./gate_pass.sh                                # 舊版過門（mission/gate_pass.py）
 #   docker compose up -d front_camera object_detector   # 只跑影像（飛控沒接時）
 #
@@ -34,6 +35,9 @@ x-base: &base
   build:
     context: ../..
     dockerfile: docker/base.Dockerfile
+    # build 指紋（docker/build-hash.sh 算的）。up.sh 比對它決定要不要重 build；直接 compose build 時是空的
+    labels:
+      orca.build-hash: ${ORCA_BASE_HASH:-}
 
 services:
   # RPi cam-relay → /camera/camera/color/image_raw、camera_info（topic 名稱同 realsense2_camera）
@@ -53,6 +57,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/perception-x86.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_PERCEPTION_HASH:-}
     gpus: all
     restart: on-failure     # 程式出錯結束就重開（重開要重新載入模型）；compose stop／down 不受影響
     volumes:
@@ -79,7 +85,7 @@ services:
 
   # 把所有 topic 錄成 rosbag（MCAP），只在跑行為樹時錄：./mission.sh 跑樹前開、樹結束（含 Ctrl-C）且船浮上水面後停，
   # 一次任務一個資料夾、一個 .mcap：logs/bag/<樹>_<時間>/，跟 logs/mission/<樹>_<時間>.csv 同名（RECORD=0 ./mission.sh 不錄）。
-  # 在 record profile，docker compose up -d 不會起它。
+  # 在 record profile，docker compose up -d、./up.sh 不會起它。
   # 單獨錄（不經 mission.sh）：BAG_NAME=名稱 docker compose --profile record up -d recorder；
   # 停止用 docker compose --profile record stop recorder（送 SIGINT，讓它把檔案收尾）。
   # 不設 restart：重開會沿用同一個 BAG_NAME，資料夾已存在，ros2 bag record 會直接失敗。
@@ -115,6 +121,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/mission.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_MISSION_HASH:-}
     profiles: [mission]
     environment:
       <<: *ros-env

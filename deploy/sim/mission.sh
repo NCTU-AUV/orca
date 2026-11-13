@@ -18,6 +18,8 @@
 # - 跟實機的 deploy/laptop 都綁 UDP 14551，不能同時跑。
 set -euo pipefail
 cd "$(dirname "$0")"
+# 映像的 build 指紋（orca.build-hash label）：跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+source ../../docker/build-hash.sh
 TREE=gate_pass
 if [[ $# -gt 0 && $1 != -* ]]; then TREE=$1; shift; fi
 export WORLD=${WORLD:-orca_qgate.sdf} GUI=${GUI:-1}
