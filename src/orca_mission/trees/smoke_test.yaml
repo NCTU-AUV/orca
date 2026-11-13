@@ -1,0 +1,42 @@
+# 不需要相機的動作測試：驗證 placeholder 執行器、行為樹的重試／逾時／條件分支。
+# 模擬裡用 orca_pool.sdf 就可以跑（沒有門也沒關係）：
+#   ros2 run orca_mission mission smoke_test --no-checklist
+name: smoke_test
+description: >
+  下潛 → 右轉 90° → 往前 → 轉回 0° → 浮上 → 上鎖。中間用 Selector 示範「看到門就停、
+  沒看到就繼續」：模擬的泳池沒有門，所以會走「沒看到」那一支。
+
+vars:
+  depth: 0.30
+  surge: 0.2
+
+root:
+  type: Sequence
+  name: 動作測試
+  children:
+    - {type: WaitReady, name: 等就緒, timeout: 30}
+    - type: Confirm
+      name: 檢查清單
+      checklist:
+        - 船浮在水面、靜止，周圍 3 m 內沒有障礙
+        - 繩子綁好，kill switch 在手邊
+    - {type: Zero, name: 歸零}
+    - {type: Arm, name: 解鎖, depth: $depth}
+    - type: Sequence
+      name: 下水之後
+      timeout: 150
+      children:
+        - {type: Dive, name: 下潛, depth: $depth, timeout: 40}
+        - {type: TurnTo, name: 右轉 90 度, yaw: 90, timeout: 20, retry: 2}
+        - type: Selector
+          name: 有門就停
+          children:
+            - type: Sequence
+              name: 看到門
+              children:
+                - {type: Seen, name: 有門嗎, labels: [gate, qualification_gate]}
+                - {type: Hold, name: 停住看門, seconds: 3}
+            - {type: Cruise, name: 往前, surge: $surge, seconds: 4}
+        - {type: TurnTo, name: 轉回 0 度, yaw: 0, timeout: 20}
+        - {type: Dive, name: 上浮, depth: 0.1, timeout: 40}
+        - {type: Finish, name: 上鎖}

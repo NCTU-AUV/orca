@@ -26,7 +26,7 @@ RF-DETR Large（DINOv2 small windowed backbone，輸入解析度 704），8 類�
 
 ## 在本機跑
 
-ROS 節點見 `src/orca_perception`，用 `deploy/laptop` 的 `detector` 服務啟動。不經 ROS 直接用：
+ROS 節點見 `src/orca_perception`，用 `deploy/laptop` 的 `object_detector` 服務啟動。不經 ROS 直接用：
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate

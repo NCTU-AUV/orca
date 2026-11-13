@@ -3,7 +3,7 @@
 
 - 以 20 Hz 發 /auv_control，控制來源固定是自主程式（SW_AUTO）。
 - 讀飛控狀態、深度、航向、8 顆馬達的 PWM，約 5 Hz 記錄到 /logs/<名稱>_<日期_時間>.csv
-  （容器的 /logs 掛到 deploy/<機器>/logs/bridge/）。
+  （容器的 /logs 掛到 deploy/<機器>/logs/fc_adapter/）。
 - 開始前：確認 mavros、adapter 在跑、飛控上鎖，請使用者確認檢查清單，呼叫 /auv_adapter/zero 歸零。
 - 結束時（正常結束、Ctrl-C、Ctrl-Z、程式出錯都一樣）：送 MANUAL、全 0、DISARM，確認上鎖。
   上鎖後船靠浮力浮上來。
@@ -43,7 +43,7 @@ CHECKLIST = [
     '繩子綁好，kill switch 在手邊',
     'QGC 的 joystick 關閉',
     'mavproxy 的 log 已出現 MAG0 initial yaw alignment complete',
-    'bridge 服務（mavros + auv_adapter）在跑',
+    'fc_adapter 服務（mavros + auv_adapter）在跑',
 ]
 
 

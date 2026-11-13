@@ -10,9 +10,10 @@
   5. STOP      停 stop_s 秒 → 上鎖（浮上來）
 任何一步逾時、或遠距離跟丟等不回來：中止，上鎖。
 
-用法（bridge 容器內，cam_bridge、detector、bridge 都要在跑）：
+用法（fc_adapter 容器內，front_camera、object_detector、fc_adapter 都要在跑）：
     python3 /orca/mission/gate_pass.py [--depth 0.30] [--surge 0.2] [--pass-s 5] [--classes gate,qualification_gate]
   其餘參數改下面的 Params。任何時候 Ctrl-C：上鎖，船浮上來。
+行為樹版的同一個流程：src/orca_mission/trees/gate_pass.yaml（deploy/*/mission.sh）。
 
 介面（見 runner.py）：控制只發 /auv_control；深度、航向跟 auv_adapter 讀同樣的 mavros topic
 （只讀），零點跟 adapter 同時記，所以讀到的 yaw 可以直接當 target_yaw 送回去；

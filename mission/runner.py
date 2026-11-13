@@ -9,7 +9,7 @@
 - 影像：/detections（orca_perception）配上 camera_info 的內參 → 門的方位角、水平偏移、門框寬度。
 - 開始前：確認 mavros、adapter、相機、detector 都在跑、飛控上鎖，請使用者確認檢查清單，歸零。
 - 結束時（走完、中止、Ctrl-C、Ctrl-Z、程式出錯都一樣）：送 MANUAL、全 0、DISARM，確認上鎖。
-- 約 20 Hz 記錄到 /logs/<名稱>_<日期_時間>.csv（容器的 /logs 掛到 deploy/<機器>/logs/bridge/）。
+- 約 20 Hz 記錄到 /logs/<名稱>_<日期_時間>.csv（容器的 /logs 掛到 deploy/<機器>/logs/fc_adapter/）。
 
 流程物件要有：first_cmd()、step(now, depth, yaw, gate) → Cmd、phase、result、message、log
 （見 gate_pass.py）。

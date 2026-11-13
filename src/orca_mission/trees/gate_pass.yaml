@@ -1,0 +1,71 @@
+# 過門：跟 mission/gate_pass.py 一樣的流程，改成行為樹。流程圖：gate_pass.md（render_tree 產生）
+#
+#   ros2 run orca_mission mission gate_pass                   # 實機（會列檢查清單、等 Enter）
+#   ros2 run orca_mission mission gate_pass --no-checklist    # 模擬
+#   ros2 run orca_mission mission gate_pass -p depth=0.9      # 覆寫 vars
+#
+# 樹結束（成功或失敗）、逾時、Ctrl-C 都會 MANUAL、全 0、DISARM（node.py），船浮上來。
+name: gate_pass
+description: >
+  歸零（浮在水面）→ 解鎖 → 下潛 → 原地轉向對準門 → 鎖航向前進、左右只用 sway 修 →
+  門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。各步的參數跟 mission/gate_pass.py 相同。
+
+vars:
+  depth: 0.30           # 過門深度 [m]
+  surge: 0.2            # 前進推力
+  pass_s: 5.0           # 盲走幾秒（水平沒有定位，只能用時間估）
+  labels: [gate, qualification_gate]
+  min_score: 0.5
+  ready_timeout: 60     # 等飛控、adapter、相機、偵測就緒最多幾秒（模型第一次載入比較久）
+
+root:
+  type: Sequence
+  name: 過門
+  children:
+    - type: WaitReady
+      name: 等就緒
+      cameras: [front]
+      detections: true
+      timeout: $ready_timeout
+
+    - type: Confirm
+      name: 檢查清單
+      checklist:
+        - 船浮在水面、靜止（等一下會以這時的深度和航向當作 0）
+        - 門在相機前方、看得到（/detections/image 有框到門）
+        - 繩子綁好，kill switch 在手邊
+        - QGC 的 joystick 關閉
+        - mavproxy 的 log 已出現 MAG0 initial yaw alignment complete
+
+    - {type: Zero, name: 歸零}
+    - {type: Arm, name: 解鎖, depth: $depth}
+
+    - type: Sequence
+      name: 下水之後
+      timeout: 180      # 從解鎖後算，整段的上限（同 gate_pass.py 的 mission_timeout）
+      children:
+        - type: Dive
+          name: 下潛
+          depth: $depth
+          tol: 0.03
+          stable_s: 2.0
+          timeout: 40
+
+        - type: AlignTo
+          name: 對準門
+          labels: $labels
+          min_score: $min_score
+
+        - type: ApproachGate
+          name: 接近門
+          labels: $labels
+          min_score: $min_score
+          surge: $surge
+
+        - type: Cruise
+          name: 盲走過門
+          surge: $surge
+          seconds: $pass_s
+
+        - {type: Hold, name: 停, seconds: 2.0}
+        - {type: Finish, name: 上鎖}

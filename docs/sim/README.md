@@ -13,7 +13,7 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 | 項目 | 說明 |
 |---|---|
 | 系統 | Linux（在 Ubuntu 24.04 上驗證過），桌面已登入（GUI 要 X 或 XWayland） |
-| 顯示卡 | NVIDIA，驅動已裝好（`nvidia-smi` 能用）。`sim` 服務設了 `gpus: all`，不開 GUI 也要有 |
+| 顯示卡 | NVIDIA，驅動已裝好（`nvidia-smi` 能用）。`simulator` 服務設了 `gpus: all`，不開 GUI 也要有 |
 | Docker | Docker Engine + compose v2，目前使用者在 `docker` 群組 |
 | NVIDIA Container Toolkit | 讓容器用 GPU。`docker info` 的 Runtimes 要有 `nvidia`，`./run.sh` 會檢查 |
 | 硬碟 | 兩個 image 合計約 5 GB（`orca-sim` 3.6 GB、`orca-base` 2.7 GB，其中 1.2 GB 是兩者共用的 `ros:humble` 基底） |
@@ -34,19 +34,19 @@ GUI=0 ./run.sh      # 不開 Gazebo 視窗
 
 | 服務 | 內容 |
 |---|---|
-| `sim` | Gazebo 泳池與 Orca、ArduSub SITL、mavproxy（MAVLink 轉送到 UDP 14550 給 QGC、UDP 14551 給 mavros） |
-| `bridge` | mavros 與 `auv_adapter.py`，跟實機用同一個 image，只差 mavros 設定（`mavros_sitl.yaml`） |
+| `simulator` | Gazebo 泳池與 Orca、ArduSub SITL、mavproxy（MAVLink 轉送到 UDP 14550 給 QGC、UDP 14551 給 mavros） |
+| `fc_adapter` | mavros 與 `auv_adapter.py`，跟實機用同一個 image，只差 mavros 設定（`mavros_sitl.yaml`） |
 
-開機後約 5 秒 EKF 對準完成（`docker compose logs bridge` 出現 `MAG0 initial yaw alignment complete`），之後才能解鎖。
+開機後約 5 秒 EKF 對準完成（`docker compose logs fc_adapter` 出現 `MAG0 initial yaw alignment complete`），之後才能解鎖。
 
 背景執行：`docker compose up -d`（`GUI=1` 時要先自己跑 `xhost +SI:localuser:root`），停止：`docker compose down`。
 
 ### 跑實機的測試程式
 
-另開終端機進 bridge 容器：
+另開終端機進 fc_adapter 容器：
 
 ```bash
-docker compose exec bridge bash
+docker compose exec fc_adapter bash
 python3 /orca/tools/pool_tests/water_depth.py     # 定深 0.15 → 0.20 → 0.10 m
 python3 /orca/tools/pool_tests/water_heading.py   # 定深 0.15 m，航向 +90 → 0 → −90 → 0°
 ```
@@ -55,13 +55,13 @@ python3 /orca/tools/pool_tests/water_heading.py   # 定深 0.15 m，航向 +90 �
 - 程式會歸零（以船浮在水面時的深度、航向為 0），所以每次都在船浮著、上鎖時開始。上一個測試上鎖後，等幾秒讓船浮回水面。
 - 同一時間只跑一支測試程式。兩支同時跑會互相切模式、解鎖、上鎖。
 - 測試程式的深度上限 0.25 m 是實機測試池的深度（`water_common.py` 的 `MAX_DEPTH`）；模擬的泳池深 1.6 m。
-- 結果 CSV 在 `deploy/sim/logs/bridge/`。mavros 與 auv_adapter 的輸出用 `docker compose logs -f bridge` 看。
+- 結果 CSV 在 `deploy/sim/logs/fc_adapter/`。mavros 與 auv_adapter 的輸出用 `docker compose logs -f fc_adapter` 看。
 - `/auv_control` 的用法與各欄位意思見 [`AuvControl.msg`](../../src/orca_msgs/msg/AuvControl.msg) 的註解。
 
 ### 鍵盤操控
 
 ```bash
-docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py   # --gain 0.3、--max-depth 0.25
+docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py   # --gain 0.3、--max-depth 0.25
 ```
 
 開一個 pygame 視窗，視窗有焦點時：W/S、A/D、R/F、Q/E 按住出力（放開就停），1/2/3 切模式，Enter 解鎖、空白鍵上鎖，Z 歸零（上鎖時），H 定深開關（開啟時 R/F 改成移動目標深度），`-`/`=` 調推力大小。視窗失去焦點時全部歸零；關閉視窗會上鎖。完整說明在 [`keyboard.py`](../../tools/teleop/keyboard.py) 的檔頭。不要跟測試程式同時跑。
@@ -70,22 +70,35 @@ docker compose run --rm tools python3 /orca/tools/teleop/keyboard.py   # --gain 
 
 ### 過門（有門、相機、偵測）
 
+行為樹版（[`src/orca_mission`](../../src/orca_mission/README.md)，流程寫在 `trees/gate_pass.yaml`）：
+
 ```bash
-./gate_pass.sh                              # 資格賽門，開 Gazebo 視窗
-GUI=0 ./gate_pass.sh --pass-s 6             # 不開視窗；後面的參數直接交給 mission/gate_pass.py
-WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
+./mission.sh                                      # 資格賽門，開 Gazebo 視窗
+GUI=0 ./mission.sh gate_pass -p pass_s=6          # 不開視窗；-p 覆寫樹的 vars
+WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
+WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉向、前進），不需要門
 ```
 
-一個指令：沒有權重就先下載 → 起 `bridge`、`camera`、`detector`（`vision` profile）→ 重開 `sim`（船回到水面、原點）→ 等 EKF 對準、飛控連線、相機、偵測都就緒 → 執行 [`mission/gate_pass.py`](../../mission/gate_pass.py)。模擬裡不列實機的檢查清單，不用按 Enter。跑完容器繼續跑，再執行一次就是重跑；全部關掉用 `docker compose --profile vision down`。
+一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator`（船回到水面、原點）→ 等 EKF 對準、飛控連線、偵測都就緒 → 用 `mission` 服務跑行為樹（`--no-checklist`）。紀錄在 `deploy/sim/logs/mission/`。
+
+舊版（狀態機 [`mission/gate_pass.py`](../../mission/gate_pass.py)，參數直接交給它）：
+
+```bash
+./gate_pass.sh                              # 資格賽門
+GUI=0 ./gate_pass.sh --pass-s 6
+WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
+```
+
+流程一樣：起 `fc_adapter`、`sim_cameras`、`object_detector` → 重開 `simulator` → 等就緒 → 在 `fc_adapter` 容器裡執行 `mission/gate_pass.py`。模擬裡不列實機的檢查清單，不用按 Enter。跑完容器繼續跑，再執行一次就是重跑；全部關掉用 `docker compose --profile vision down`。
 
 | 世界 | 內容 |
 |---|---|
 | `orca_qgate.sdf`（預設） | 資格賽門（`models/q_gate`），從水面垂到池底，任何深度都能過；在船頭前方 6 m、偏右 1 m |
 | `orca_gate.sdf` | 導航門（`models/gate`），立在池底、高 1 m，橫桿在水下 1.6 − 1.0 = 0.6 m：船要潛到約 0.9 m 才不會從橫桿上方經過 |
 
-- 兩個世界的船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）。
+- 兩個世界的船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）和一顆朝下的底部相機（640×480、10 Hz、水平視角 70°，影像上方 = 船頭；實機規格還沒定）。
 - 門的模型取自 [SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 依 2026 規則書做的版本。
-- `camera` 服務（[`sim/gz_camera_bridge.py`](../../sim/gz_camera_bridge.py)）把 Gazebo 影像轉成跟實機一樣的 `/camera/camera/color/image_raw`、`camera_info`；`detector` 跟實機是同一個 RF-DETR 節點。不需要 `ros_gz`。
+- `sim_cameras` 服務（[`sim/gz_camera_bridge.py`](../../sim/gz_camera_bridge.py)）把 Gazebo 影像轉成跟實機一樣的 `/camera/camera/color/image_raw`、`camera_info`，底部是 `/bottom_camera/image_raw`、`camera_info`；`object_detector` 跟實機是同一個 RF-DETR 節點，兩台相機輪流推論。不需要 `ros_gz`。
 - 2026-11-12 實測（`orca_qgate.sdf`、`GUI=0`）：相機約 11～14 fps；RF-DETR 把資格賽門認成 `gate`（分數 0.6～0.95，流程兩類都接受）；連跑兩次都走完，Gazebo 真值顯示通過門平面時離門中心 1.3 cm。
 - **畫面比真實水下乾淨**：沒有水的衰減、色偏、浮游物（Harmonic 的 ogre2 不支援 fog），偵測會比實機容易。適合驗證流程與方向，不代表實機的偵測距離。
 - 模擬裡 surge 0.2 約 0.8 m/s，盲走 8 秒會衝過門約 6 m，離池壁不到 2 m（現在 `gate_pass.py` 的預設是 5 秒）。
@@ -98,9 +111,9 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
 
 | 改了什麼 | 怎麼生效 |
 |---|---|
-| repo 的 `sim/` 底下的世界、模型、`start.sh`，或 `firmware/ardusub/sitl.parm` | `docker compose up -d --force-recreate sim`（直接掛進容器，不用重 build） |
+| repo 的 `sim/` 底下的世界、模型、`start.sh`，或 `firmware/ardusub/sitl.parm` | `docker compose up -d --force-recreate simulator`（直接掛進容器，不用重 build） |
 | `tools/pool_tests/*.py` | 重新執行該程式 |
-| `src/` 底下的 `.py`、mavros 設定 | `docker compose restart bridge`（`src/` 掛進容器，不用重 build） |
+| `src/` 底下的 `.py`、mavros 設定 | `docker compose restart fc_adapter`（`src/` 掛進容器，不用重 build） |
 | Dockerfile、`orca_msgs`、`package.xml`、`setup.py` | `docker compose build` 後再啟動 |
 
 `compose.yaml` 可用的環境變數：`GUI`（1 / 0）、`WORLD`（`sim/worlds/` 底下的世界檔，預設 `orca_pool.sdf`）、`DISPLAY`。
@@ -114,7 +127,8 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
 | `deploy/sim/logs/sim/ardusub/ardusub.out` | ArduSub 的終端機輸出 |
 | `deploy/sim/logs/sim/ardusub/logs/*.BIN` | 飛控的 DataFlash log（高頻姿態、控制器目標與出力），用 pymavlink 或 MAVExplorer 讀 |
 | `deploy/sim/logs/sim/mavproxy/` | mavproxy 的 tlog |
-| `deploy/sim/logs/bridge/*.csv` | 測試程式的紀錄 |
+| `deploy/sim/logs/fc_adapter/*.csv` | 測試程式、舊版過門的紀錄 |
+| `deploy/sim/logs/mission/*.csv` | 行為樹的紀錄 |
 
 ## 已知問題與限制
 
@@ -140,7 +154,7 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
 
 - `logs/` 底下的檔案由容器以 root 寫入，主機上刪除要 `sudo rm -rf logs/*`，或借容器刪：`docker run --rm -v "$PWD/logs:/l" orca-sim bash -c 'rm -rf /l/*'`（在 `deploy/sim/` 底下）。
 - 兩個服務都用 host network，佔用本機的 UDP 9002、14550、14551 與 TCP 5760～5763。同一台電腦不能同時跑另一套 ArduPilot SITL 或 mavros。
-- bridge 在跑的時候，不要讓其他程式綁 UDP 14551。**筆電上的實機 bridge（`deploy/laptop`）也綁 14551，兩者不能同時跑**，否則 SITL 的 MAVLink 會送進接著實機的 mavros：同一個埠只會有一個程式收到封包，mavros 會斷線。要直接讀 MAVLink，就在 QGC 沒開的時候聽 14550。
+- fc_adapter 在跑的時候，不要讓其他程式綁 UDP 14551。**筆電上的實機 fc_adapter（`deploy/laptop`）也綁 14551，兩者不能同時跑**，否則 SITL 的 MAVLink 會送進接著實機的 mavros：同一個埠只會有一個程式收到封包，mavros 會斷線。要直接讀 MAVLink，就在 QGC 沒開的時候聽 14550。
 - ROS 2 Humble 的官方搭配是 Gazebo Fortress；這裡用 Harmonic。之後要接 ROS 橋接時用 `ros-humble-ros-gzharmonic`。
 
 ## 檔案
@@ -155,8 +169,9 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
 | `sim/worlds/orca_qgate.sdf`、`orca_gate.sdf` | 泳池 + 有相機的 Orca + 資格賽門／導航門 |
 | `sim/models/pool/`、`sim/models/orca/` | 泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin） |
 | `sim/models/orca_cam/`、`gate/`、`q_gate/` | Orca + 前視相機、導航門、資格賽門 |
-| `sim/gz_camera_bridge.py` | Gazebo 相機 → ROS 影像（`camera` 服務） |
-| `deploy/sim/gate_pass.sh` | 一個指令跑過門 |
+| `sim/gz_camera_bridge.py` | Gazebo 前視、底部相機 → ROS 影像（`sim_cameras` 服務） |
+| `deploy/sim/mission.sh` | 一個指令跑行為樹（預設過門） |
+| `deploy/sim/gate_pass.sh` | 一個指令跑舊版過門 |
 | `src/orca_bridge/` | mavros + `auv_adapter.py`，跟實機共用 |
 | `tools/pool_tests/` | 水池測試腳本 |
 
@@ -164,4 +179,4 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9   # 導航門
 
 - 比賽道具：另寫一個世界檔 `<include>` 泳池與 `orca_cam`（要相機）或 `orca`，用 `WORLD=<檔名>` 載入。過門的兩個世界檔可以當範本。
 - 水下成像（衰減、色偏）：SAUVC-Simulation 的 `underwater_camera_node.py` 用深度圖做，可以搬到 `gz_camera_bridge.py`。
-- ROS 橋接、視覺、任務層：在 `deploy/sim/compose.yaml` 新增服務（ROS 2 Humble、host network、`ROS_LOCALHOST_ONLY=1`），不改 `sim`、`bridge` 的埠與 topic。
+- ROS 橋接、視覺、任務層：在 `deploy/sim/compose.yaml` 新增服務（ROS 2 Humble、host network、`ROS_LOCALHOST_ONLY=1`），不改 `simulator`、`fc_adapter` 的埠與 topic。
