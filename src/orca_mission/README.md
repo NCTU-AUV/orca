@@ -4,21 +4,26 @@
 
 | 樹 | 內容 | 流程圖 |
 |---|---|---|
-| `gate_pass` | 過門，流程和參數跟 `mission/gate_pass.py` 一樣 | [gate_pass.md](trees/gate_pass.md) |
+| `gate_pass` | 過門：航向從解鎖起就鎖住（歸零時的船頭方向），對準只用 sway 平移 | [gate_pass.md](trees/gate_pass.md) |
+| `gate_pass_yaw` | 過門：下潛後先原地轉 yaw 對準門、鎖住當下的航向，之後跟 `gate_pass` 一樣 | [gate_pass_yaw.md](trees/gate_pass_yaw.md) |
 | `smoke_test` | 動作測試（下潛、轉向、前進、上浮），不需要相機 | [smoke_test.md](trees/smoke_test.md) |
 
 ## 跑
 
 ```bash
 deploy/sim/mission.sh                               # 模擬：過門（資格賽門）
+deploy/sim/mission.sh gate_pass_yaw                 # 模擬：過門，下潛後先轉向對準門再鎖航向
 WORLD=orca_pool.sdf deploy/sim/mission.sh smoke_test
-deploy/laptop/mission.sh                            # 實機：過門，解鎖前列檢查清單、等 Enter
+deploy/laptop/up.sh                                 # 實機：起容器、等就緒（映像不存在或過期才 build，已經在跑的不重開）
+deploy/laptop/mission.sh                            # 實機：過門（會先跑 up.sh），解鎖前列檢查清單、等 Enter
 deploy/laptop/mission.sh gate_pass -p depth=0.5 -p pass_s=6    # -p 覆寫樹的 vars
 ```
 
 容器裡直接執行：`mission <樹> [-p 名稱=值 ...] [--no-checklist] [--print-tree]`。
 
 無論樹成功或失敗、流程中飛控自己上鎖、程式出錯、Ctrl-C、Ctrl-Z、`docker stop`，都會送 MANUAL、全 0、DISARM，並等飛控上鎖。adapter 的看門狗在 0.5 秒沒收到 `/auv_control` 時只會改送中位，不切模式、不上鎖（ALT_HOLD 下船會停在水裡維持深度），所以上鎖一定要由這裡做。
+
+上鎖之後會等船浮上水面（深度 ≤ 0.05 m 持續 1 秒，最多 30 秒）才結束，CSV 跟著記到上浮的過程；`mission.sh` 在 `mission` 結束後才停止錄 rosbag，所以 bag 也錄到上浮為止。等的時候再按一次 Ctrl-C 就不等；`docker stop` 不等。
 
 ## 看狀態
 

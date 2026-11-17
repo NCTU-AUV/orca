@@ -163,3 +163,21 @@ class VehicleState:
 
     def adapter_alive(self, now):
         return now - self.adapter_t < 0.5
+
+
+class SurfaceWatch:
+    """收尾時判斷船浮上水面了沒：深度（相對歸零時的水面）≤ depth 持續 hold_s 秒。
+    深度不明（NaN）或又沉下去就重新計時。"""
+
+    def __init__(self, depth=0.05, hold_s=1.0):
+        self.depth = depth
+        self.hold_s = hold_s
+        self.since = None
+
+    def update(self, now, depth):
+        if not (math.isfinite(depth) and depth <= self.depth):
+            self.since = None
+            return False
+        if self.since is None:
+            self.since = now
+        return now - self.since >= self.hold_s

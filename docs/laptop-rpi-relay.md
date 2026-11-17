@@ -35,9 +35,11 @@ scp mavproxy-udpin.sh rpi: && ssh -t rpi sudo bash mavproxy-udpin.sh   # mavprox
 ```bash
 ml/rfdetr/fetch_weights.sh                 # 第一次
 cd deploy/laptop
+./up.sh                                    # 一次起下面三個服務並等飛控、相機、偵測就緒；映像不存在或過期才 build，已經在跑的不重開
+./up.sh --build                            # 不管指紋，全部重 build；映像有變的容器重開
 docker compose up -d front_camera object_detector   # 影像與偵測
 docker compose up -d fc_adapter                     # 飛控（RPi 的 mavproxy 要先加 udpin）
-docker compose up -d recorder              # 所有 topic 錄成 rosbag → logs/bag/（docker compose up -d 會一起起）
+./mission.sh                               # 跑行為樹；樹跑的期間才錄 rosbag → logs/bag/<樹>_<時間>/（RECORD=0 不錄）
 docker compose logs -f object_detector             # 每 5 秒印 fps 與延遲
 
 # 看偵測畫面（主機先跑 xhost +SI:localuser:root）
@@ -49,13 +51,38 @@ docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_de
 # 鍵盤操控（主機先跑 xhost +SI:localuser:root）。按鍵與安全機制見 tools/teleop/keyboard.py 檔頭
 docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
 
-# 過門（行為樹，src/orca_mission/trees/gate_pass.yaml）：起服務、等就緒、跑行為樹（解鎖前會等你按 Enter）
+# 過門（行為樹，src/orca_mission/trees/gate_pass.yaml）：先跑 ./up.sh、再跑行為樹（解鎖前會等你按 Enter）
 ./mission.sh
 # 舊版過門（mission/gate_pass.py）
 ./gate_pass.sh
 ```
 
 上岸檢查飛控連線（不要解鎖）：`docker compose exec fc_adapter bash -ic 'ros2 topic echo --once /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。
+
+### 啟動流程（`./up.sh`、`./mission.sh`）
+
+- `./up.sh`：沒有權重就先下載 → 映像不存在或過期才 build → 起 `front_camera`、`object_detector`、`fc_adapter` → 等飛控連線（60 秒）、相機（60 秒）、偵測（300 秒）。已經在跑、映像沒換的容器不重開，mavros 的連線不會斷。不起 `recorder`、`mission`。
+- 「過期」是指映像的 `orca.build-hash` label 跟 [`docker/build-hash.sh`](../docker/build-hash.sh) 現在算出來的不同：改了 Dockerfile、`package.xml`、`setup.py`、msg，或 `src/` 新增、刪除、改名檔案才會重 build；改 `.py`、樹的 yaml 不會（`src/` 掛進容器，重跑任務就生效）。要強制重 build 用 `./up.sh --build`。
+- 模擬的 `./run.sh`、`./mission.sh`、`./gate_pass.sh` 跟實機共用映像，build 時也會蓋上同樣的指紋，跑過模擬再回來跑實機不會白 build。
+- `./mission.sh [樹] [-p 變數=值 ...]`：先跑 `./up.sh` → 開始錄 rosbag → 跑行為樹（列檢查清單、等 Enter）→ 樹結束、上鎖、船浮上水面後停止錄影，最後印出 bag 的路徑。`RECORD=0 ./mission.sh` 不錄。
+- `./gate_pass.sh`（舊版過門）也是先跑 `./up.sh`，不錄 rosbag。
+- 改了 `compose.yaml` 要套用到已經在跑的容器：`docker compose up -d <服務>`。全部關掉：`docker compose down`。
+
+## 紀錄（CSV、rosbag）
+
+路徑都在 `deploy/laptop/` 底下：
+
+| 路徑 | 內容 | 誰寫的 |
+|---|---|---|
+| `logs/mission/<樹>_<時間>.csv` | 行為樹的紀錄（20 Hz） | `./mission.sh` |
+| `logs/bag/<樹>_<時間>/` | rosbag（MCAP），一次任務一個 `.mcap`，跟 CSV 同名 | `./mission.sh`（`RECORD=0` 不錄） |
+| `logs/fc_adapter/*.csv` | 水池測試腳本、舊版過門的紀錄 | `water_*.py`、`./gate_pass.sh` |
+
+- rosbag 從樹開始（列檢查清單時）錄到樹結束、船浮上水面（上鎖後最多等 30 秒，再按一次 Ctrl-C 不等）。`docker compose up -d`、`./up.sh`、`./gate_pass.sh`、水池測試腳本都不錄。
+- 錄全部 topic（mavros、`/auv_control`、`/detections`、`/mission/status`、`/rosout` 的節點 log）。影像只錄畫好框的 JPEG（`/detections/image/compressed`），相機的影像（原始、JPEG）都不錄，約 4 GB／小時。要改錄哪些 topic 看 `compose.yaml` 的 `recorder`。
+- 看 bag：用 [Foxglove](https://foxglove.dev) 開 `.mcap`（還在寫的檔打不開），layout 用 [`tools/foxglove/orca_mission.json`](../tools/foxglove/orca_mission.json)。回放：先 `docker compose down`，再 `docker compose run --rm gui_tools ros2 bag play /bags/<樹>_<時間>`（`gui_tools` 把 `logs/bag/` 唯讀掛在 `/bags`）。
+- 不經 `./mission.sh` 單獨錄：`BAG_NAME=<名稱> docker compose --profile record up -d recorder`，存到 `logs/bag/<名稱>/`；停止用 `docker compose --profile record stop recorder`（送 SIGINT，讓它把檔案收尾）。
+- `logs/` 底下的檔案由容器以 root 寫入，主機上刪除要 `sudo`。
 
 ## 實測數字（2026-11-12）
 

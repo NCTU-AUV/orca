@@ -61,6 +61,9 @@ services:
     build:
       context: ../..
       dockerfile: docker/base.Dockerfile
+      # build 指紋（docker/build-hash.sh 算的），跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+      labels:
+        orca.build-hash: ${ORCA_BASE_HASH:-}
     network_mode: host            # 收 mavproxy 送到 127.0.0.1:14551 的封包
     ipc: host
     init: true
@@ -168,6 +171,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/perception-x86.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_PERCEPTION_HASH:-}
     profiles: [vision]
     network_mode: host
     ipc: host
@@ -182,7 +187,7 @@ services:
       - torch-cache:/root/.cache
     command: [ros2, run, orca_perception, detector]
 
-  # 把 topic 錄成 rosbag（MCAP），一個資料夾一次任務：./mission.sh 跑樹前開、樹結束後停，
+  # 把 topic 錄成 rosbag（MCAP），一個資料夾一次任務：./mission.sh 跑樹前開、樹結束且船浮上水面後停，
   # 存在 logs/bag/<樹>_<時間>/，跟 logs/mission/<樹>_<時間>.csv 同名（RECORD=0 ./mission.sh 不錄）。
   # 影像只錄畫好框的 JPEG（/detections/image/compressed、/detections/bottom_image/compressed），
   # 相機的原始影像（含其他壓縮格式）、畫好框的原始影像都不錄，一次過門（約 30 秒）約 12 MB。
@@ -220,6 +225,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/mission.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_MISSION_HASH:-}
     profiles: [mission]
     network_mode: host
     ipc: host

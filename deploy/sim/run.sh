@@ -3,6 +3,8 @@
 # 環境變數：GUI=0 不開 Gazebo 視窗；WORLD=<檔名> 換世界檔（repo 的 sim/worlds 底下）
 set -euo pipefail
 cd "$(dirname "$0")"
+# 映像的 build 指紋（orca.build-hash label）：跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+source ../../docker/build-hash.sh
 
 if [[ "${GUI:-1}" == "1" ]]; then
   xhost +SI:localuser:root >/dev/null

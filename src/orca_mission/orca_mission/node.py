@@ -18,6 +18,8 @@
 - 收尾一定要做：樹結束（成功或失敗）、飛控在流程中上鎖、程式出錯、Ctrl-C、Ctrl-Z、SIGTERM
   → MANUAL、全 0、DISARM，等飛控上鎖。adapter 的看門狗在 0.5 秒沒收到指令時只會送中位，
   不切模式、不上鎖，船會停在水裡維持深度。
+- 上鎖之後等船浮上水面（深度 ≤ SURFACE_DEPTH 持續 SURFACE_HOLD_S 秒，最多 SURFACE_TIMEOUT 秒，
+  再按一次 Ctrl-C 跳過）才結束：CSV 和 rosbag（mission.sh 在這個程式結束後才停止錄影）錄到上浮的過程。
 - 狀態：/mission/status（std_msgs/String，JSON，2 Hz）；py_trees_ros 的樹快照
   （py-trees-tree-watcher 可以即時看）；CSV 記錄到 /logs/<樹>_<日期_時間>.csv（20 Hz）。
 """
@@ -52,10 +54,13 @@ from .bt.loader import TreeError, build, find_tree, read
 from .perception import CameraConfig, Perception
 from .snapshot import Snapshot
 from .task_runner import Mode, TaskRunner
-from .vehicle import Limits, Shaper, VehicleState
+from .vehicle import Limits, Shaper, SurfaceWatch, VehicleState
 
 CONTROL_HZ = 20
 TICK_HZ = 10
+SURFACE_DEPTH = 0.05    # 收尾等上浮：深度（相對歸零時的水面）≤ 這個值、
+SURFACE_HOLD_S = 1.0    # 持續這麼久算浮上來了
+SURFACE_TIMEOUT = 30.0  # 最多等幾秒
 MODES = {'MANUAL': AuvControl.MODE_MANUAL, 'DEPTH_HOLD': AuvControl.MODE_DEPTH_HOLD}
 ARMS = {'': AuvControl.ARM_NO_CHANGE, 'ARM': AuvControl.ARM, 'DISARM': AuvControl.DISARM}
 
@@ -275,9 +280,41 @@ def parse_overrides(items):
     return out
 
 
+def wait_surface(node, executor):
+    """上鎖之後等船浮上水面。沒歸零（深度不明）、被 SIGTERM 停掉（docker stop 只給 10 秒）就不等；
+    等的時候 Ctrl-C 跳過。"""
+    node.f.flush()
+    if TERMINATED or not math.isfinite(node.vehicle.depth(node.now())):
+        return
+    print(f'等船浮上水面（深度 ≤ {SURFACE_DEPTH:.2f} m，最多 {SURFACE_TIMEOUT:.0f} 秒；'
+          f'再按 Ctrl-C 跳過）', flush=True)
+    watch = SurfaceWatch(SURFACE_DEPTH, SURFACE_HOLD_S)
+    deadline = time.monotonic() + SURFACE_TIMEOUT
+    while time.monotonic() < deadline:
+        try:
+            executor.spin_once(timeout_sec=0.05)
+        except KeyboardInterrupt:
+            print('\n不等上浮了', flush=True)
+            return
+        except Exception:
+            traceback.print_exc()
+        now = node.now()
+        if watch.update(now, node.vehicle.depth(now)):
+            print(f'已浮上水面（深度 {node.vehicle.depth(now):.2f} m）', flush=True)
+            return
+    print(f'{SURFACE_TIMEOUT:.0f} 秒內沒浮上水面（深度 {node.vehicle.depth(node.now()):.2f} m），不等了',
+          flush=True)
+
+
+TERMINATED = False      # 收到 SIGTERM（docker stop）：收尾不等上浮
+
+
 def on_signal(signum, frame):
     # Ctrl-Z 預設會把程式暫停在背景、SIGTERM（docker stop）預設直接結束，
     # 兩者都不會上鎖（adapter 的看門狗只送中位）。改成跟 Ctrl-C 一樣走收尾
+    global TERMINATED
+    if signum == signal.SIGTERM:
+        TERMINATED = True
     raise KeyboardInterrupt
 
 
@@ -345,6 +382,8 @@ def main(argv=None):
         if finishing:
             print('飛控已上鎖，船會浮上來' if not node.vehicle.armed
                   else '飛控沒有上鎖！用 QGC 或 kill switch 處理', flush=True)
+            if not node.vehicle.armed:
+                wait_surface(node, executor)
         print(f'記錄在 {log_path}', flush=True)
         ok = node.done[0]
         node.f.close()

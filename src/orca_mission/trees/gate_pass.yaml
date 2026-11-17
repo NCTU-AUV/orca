@@ -10,12 +10,12 @@ name: gate_pass
 description: >
   歸零（浮在水面）→ 解鎖（航向鎖在歸零時的船頭方向）→ 下潛 → 原地用 sway 平移，
   讓門中心落在船頭正前方（偏離 ≤ 門寬 × center_tol）→ 前進、左右只用 sway 修 →
-  門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。
+  門框再寬都不停，直到完全看不到門 → 盲走 pass_s 秒 → 停 → 上鎖。
 
 vars:
   depth: 0.30           # 過門深度 [m]
   surge: 0.2            # 前進推力
-  pass_s: 5.0           # 盲走幾秒（水平沒有定位，只能用時間估）
+  pass_s: 7.0           # 完全看不到門之後盲走幾秒（水平沒有定位，只能用時間估）
   labels: [gate, qualification_gate]
   min_score: 0.5
   center_tol: 0.1       # 平移對準的門檻：船偏離門中線 ≤ 門寬 × center_tol（1.5 m 門 → ±15 cm）

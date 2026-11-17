@@ -4,6 +4,7 @@
 #
 #   ./mission.sh                                      # gate_pass，SAUVC 2027 資格賽（sauvc_qual.sdf）
 #   ./mission.sh gate_pass -p pass_s=6                # -p 覆寫樹的 vars
+#   ./mission.sh gate_pass_yaw                        # 過門，下潛後先轉向對準門再鎖航向
 #   WORLD=sauvc_final.sdf ./mission.sh <樹>           # 決賽主場地（導航門、flare、drum、Surfacing Square）
 #   WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（空池，不需要門）
 #   GUI=0 ./mission.sh                                # 不開 Gazebo 視窗
@@ -14,12 +15,14 @@
 # - 第一次會下載模型權重、build image，要等比較久。
 # - 不列檢查清單（--no-checklist）。任何時候 Ctrl-C：上鎖，船浮上來。
 # - 紀錄：logs/mission/<樹>_<時間>.csv，rosbag（MCAP，影像只有畫好框的 JPEG）在同名的 logs/bag/<樹>_<時間>/，
-#   從樹開始錄到樹結束（Ctrl-C 也會收尾），用 Foxglove 直接開 .mcap。
+#   從樹開始錄到樹結束、船浮上水面（mission 上鎖後最多等 30 秒，Ctrl-C 也一樣），收尾（不到 1 秒）後用 Foxglove 直接開 .mcap。
 #   裁判（sim_referee）的事件與分數在 logs/referee/<樹>_<時間>.jsonl，樹跑完會印出來。
 # - 全部關掉：docker compose --profile vision down
 # - 跟實機的 deploy/laptop 都綁 UDP 14551，不能同時跑。
 set -euo pipefail
 cd "$(dirname "$0")"
+# 映像的 build 指紋（orca.build-hash label）：跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+source ../../docker/build-hash.sh
 TREE=gate_pass
 if [[ $# -gt 0 && $1 != -* ]]; then TREE=$1; shift; fi
 export WORLD=${WORLD:-sauvc_qual.sdf} GUI=${GUI:-1}
@@ -85,8 +88,8 @@ fi
 
 if [[ $RECORD == 1 ]]; then
   stop_recorder() {
-    docker compose --profile record stop recorder > /dev/null 2>&1 || true     # SIGINT：把 .mcap 收尾
-    echo "rosbag 在 logs/bag/$RUN/（用 Foxglove 開裡面的 .mcap）"
+    docker compose --profile record stop recorder > /dev/null 2>&1 || true     # SIGINT：把 .mcap 收尾（< 1 秒）
+    echo "rosbag 在 $PWD/logs/bag/$RUN/（用 Foxglove 開裡面的 .mcap）"
   }
   trap stop_recorder EXIT
   BAG_NAME=$RUN docker compose --profile record up -d --force-recreate recorder
@@ -97,7 +100,7 @@ fi
 referee_summary() {
   local log=logs/referee/$RUN.jsonl
   [[ -s $log ]] || return 0
-  # 樹結束時船才剛上鎖，等它浮上來、裁判記下這次的結束（surfaced 等），最多 10 秒。空池沒有計分規則，不用等
+  # 裁判要船在水面停 1 秒才記 surfaced（這次的結束），最多再等 10 秒。空池沒有計分規則，不用等
   if ! grep -q '"mode": "none"' "$log"; then
     for _ in $(seq 20); do grep -q '"event": "run_ended"' "$log" && break; sleep 0.5; done
   fi
