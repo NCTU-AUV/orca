@@ -1,65 +1,63 @@
 <?xml version="1.0"?>
 <!--
-  Qualification gate, SAUVC 2026 rulebook, qualification arena:
-  "150cm wide spanning from bottom of the pool to the top, hanging from the
-  water surface with orange markings on both port and starboard sides."
+  資格賽門，SAUVC 2027 Rulebook 2027.3.2：
+  "150cm wide and ~100cm deep gate hanging from the water surface with orange markings
+  on both port and starboard sides."（2026 是從水面垂到池底；2027 改成只往下約 100 cm、不落地。）
 
-  Geometry from the rulebook front view (docs/sim-visual/reference/
-  qualification-gate-2026.jpg): a white float bar riding on the surface with
-  two 4 cm orange poles hanging from it down to the pool floor. The poles were
-  previously 8 cm — twice the real diameter — which made the gate read far
-  heavier than it does in the competition footage.
+  外形照 docs/sim/reference/qualification-gate.jpg：水面上一根白色浮桿，兩根 4 cm 的橘色柱
+  吊在下面，柱距 150 cm。沒有底桿，所以門有三邊：兩根柱和上面的浮桿。
 
-  Model origin sits at the water surface, centred between the poles; the poles
-  hang downwards from there.
+  模型原點在水面、兩柱中間；兩柱沿模型 x，船沿模型 y 穿過。
+  static：撞到會被擋住（實際的門是吊著的、會被撞得晃，這裡沒有模擬）。
+  規則：碰到三邊任何一邊，資格賽該次失敗（sim/referee.py）。
 -->
-<sdf version="1.8">
+<sdf version="1.9">
   <model name="q_gate">
     <static>true</static>
 
-    <!-- White float bar riding on the surface. -->
-    <link name="top_bar">
-      <pose>0 0 0 0 1.5708 0</pose>
+    <!-- 白色浮桿，一半露出水面 -->
+    <link name="float_bar">
+      <pose>0 0 0.01 0 1.5707963268 0</pose>
       <visual name="visual">
-        <geometry><box><size>0.06 0.10 1.54</size></box></geometry>
+        <geometry><cylinder><radius>0.025</radius><length>1.60</length></cylinder></geometry>
         <material>
-          <ambient>0.75 0.75 0.75 1</ambient>
-          <diffuse>0.85 0.85 0.85 1</diffuse>
-          <specular>0.2 0.2 0.2 1</specular>
+          <ambient>0.94 0.95 0.96 1</ambient>
+          <diffuse>0.94 0.95 0.96 1</diffuse>
+          <specular>0.15 0.15 0.15 1</specular>
         </material>
       </visual>
       <collision name="collision">
-        <geometry><box><size>0.06 0.10 1.54</size></box></geometry>
+        <geometry><cylinder><radius>0.025</radius><length>1.60</length></cylinder></geometry>
       </collision>
     </link>
 
-    <link name="left_post">
-      <pose>-0.75 0 -0.8 0 0 0</pose>
+    <link name="port_post">
+      <pose>-0.75 0 -0.5 0 0 0</pose>
       <visual name="visual">
-        <geometry><cylinder><radius>0.02</radius><length>1.6</length></cylinder></geometry>
+        <geometry><cylinder><radius>0.02</radius><length>1.0</length></cylinder></geometry>
         <material>
-          <ambient>0.75 0.75 0.75 1</ambient>
-          <diffuse>0.85 0.85 0.85 1</diffuse>
-          <specular>0.2 0.2 0.2 1</specular>
+          <ambient>1.0 0.45 0.02 1</ambient>
+          <diffuse>1.0 0.45 0.02 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
         </material>
       </visual>
       <collision name="collision">
-        <geometry><cylinder><radius>0.02</radius><length>1.6</length></cylinder></geometry>
+        <geometry><cylinder><radius>0.02</radius><length>1.0</length></cylinder></geometry>
       </collision>
     </link>
 
-    <link name="right_post">
-      <pose>0.75 0 -0.8 0 0 0</pose>
+    <link name="starboard_post">
+      <pose>0.75 0 -0.5 0 0 0</pose>
       <visual name="visual">
-        <geometry><cylinder><radius>0.02</radius><length>1.6</length></cylinder></geometry>
+        <geometry><cylinder><radius>0.02</radius><length>1.0</length></cylinder></geometry>
         <material>
-          <ambient>0.75 0.75 0.75 1</ambient>
-          <diffuse>0.85 0.85 0.85 1</diffuse>
-          <specular>0.2 0.2 0.2 1</specular>
+          <ambient>1.0 0.45 0.02 1</ambient>
+          <diffuse>1.0 0.45 0.02 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
         </material>
       </visual>
       <collision name="collision">
-        <geometry><cylinder><radius>0.02</radius><length>1.6</length></cylinder></geometry>
+        <geometry><cylinder><radius>0.02</radius><length>1.0</length></cylinder></geometry>
       </collision>
     </link>
   </model>

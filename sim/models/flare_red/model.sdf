@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<!--
+  由 tools/sim/gen_assets.py 產生，不要手改：改那支再重跑
+
+  red flare，SAUVC 2027 Rulebook 2027.3.2：高 80 cm、桿徑 1.6 cm 的硬桿，
+  頂端擱一顆高爾夫球。外形照 docs/sim/reference/flares-2024.jpg 與隊上的實拍：細桿插在一塊同色的
+  圓底盤上，直接立在池底。沒有浮力、沒有繫繩、沒有固定：撞下去整支會晃、會倒、會被推走，
+  不會自己站回直立（跟橘色 flare 完全不同，見 orange_flare）。
+
+  兩個 link：
+    pole  底盤 + 桿 + 球座。質量 0.7999999999999999 kg 是扣掉浮力後的等效值（世界檔的 Buoyancy 沒有把它列進
+          <enable>），重心很低；在離地 50 cm 處大約 1.0 N 就推得倒。
+    ball  高爾夫球（直徑 4.27 cm、45.9 g），沒有 joint，只是擱在球座上。
+          球座是 6 顆小球排成的圈，桿子傾斜超過約 14° 或被撞一下球就掉。
+          世界檔的 Buoyancy 要 <enable>模型名::ball</enable>，球才會慢慢沉而不是直接摔下去。
+  self_collide：同一個模型的 link 預設互不碰撞，要開才擱得住球。
+  模型原點在池底（底盤底面中心）。規則：球掉下來 20 分，三支照指定順序再加 60 分（sim/referee.py）。
+-->
+<sdf version="1.9">
+  <model name="flare_red">
+    <self_collide>true</self_collide>
+
+    <link name="pole">
+      <inertial>
+        <pose>0 0 0.0598 0 0 0</pose>
+        <mass>0.7999999999999999</mass>
+        <inertia><ixx>0.01964</ixx><iyy>0.01964</iyy><izz>0.001482</izz></inertia>
+      </inertial>
+      <collision name="base">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry><cylinder><radius>0.065</radius><length>0.02</length></cylinder></geometry>
+      </collision>
+      <collision name="rod">
+        <pose>0 0 0.4080 0 0 0</pose>
+        <geometry><cylinder><radius>0.008</radius><length>0.7760</length></cylinder></geometry>
+      </collision>
+      <collision name="seat_0"><pose>0.00700 0.00000 0.7960 0 0 0</pose><geometry><sphere><radius>0.004</radius></sphere></geometry></collision>
+      <collision name="seat_1"><pose>0.00350 0.00606 0.7960 0 0 0</pose><geometry><sphere><radius>0.004</radius></sphere></geometry></collision>
+      <collision name="seat_2"><pose>-0.00350 0.00606 0.7960 0 0 0</pose><geometry><sphere><radius>0.004</radius></sphere></geometry></collision>
+      <collision name="seat_3"><pose>-0.00700 0.00000 0.7960 0 0 0</pose><geometry><sphere><radius>0.004</radius></sphere></geometry></collision>
+      <collision name="seat_4"><pose>-0.00350 -0.00606 0.7960 0 0 0</pose><geometry><sphere><radius>0.004</radius></sphere></geometry></collision>
+      <collision name="seat_5"><pose>0.00350 -0.00606 0.7960 0 0 0</pose><geometry><sphere><radius>0.004</radius></sphere></geometry></collision>
+      <visual name="base">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry><cylinder><radius>0.065</radius><length>0.02</length></cylinder></geometry>
+        <material><ambient>0.85 0.08 0.08 1</ambient><diffuse>0.85 0.08 0.08 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <visual name="base_hub">
+        <pose>0 0 0.035 0 0 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>0.03</length></cylinder></geometry>
+        <material><ambient>0.85 0.08 0.08 1</ambient><diffuse>0.85 0.08 0.08 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <visual name="rod">
+        <pose>0 0 0.4080 0 0 0</pose>
+        <geometry><cylinder><radius>0.008</radius><length>0.7760</length></cylinder></geometry>
+        <material><ambient>0.85 0.08 0.08 1</ambient><diffuse>0.85 0.08 0.08 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <visual name="seat">
+        <pose>0 0 0.7930 0 0 0</pose>
+        <geometry><cylinder><radius>0.011</radius><length>0.012</length></cylinder></geometry>
+        <material><ambient>0.85 0.08 0.08 1</ambient><diffuse>0.85 0.08 0.08 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+    </link>
+
+    <link name="ball">
+      <pose>0 0 0.82036 0 0 0</pose>
+      <inertial>
+        <mass>0.0459</mass>
+        <inertia><ixx>8.369e-06</ixx><iyy>8.369e-06</iyy><izz>8.369e-06</izz></inertia>
+      </inertial>
+      <collision name="collision"><geometry><sphere><radius>0.02135</radius></sphere></geometry></collision>
+      <visual name="visual">
+        <geometry><sphere><radius>0.02135</radius></sphere></geometry>
+        <material><ambient>0.95 0.95 0.93 1</ambient><diffuse>0.95 0.95 0.93 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

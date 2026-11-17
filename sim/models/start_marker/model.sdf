@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!--
+  資格賽起點標記，SAUVC 2027 Rulebook 2027.3.2：池壁上 1 m 寬的標記，AUV 從這裡出發，
+  而且出發時要碰到牆。顏色照 docs/sim/reference/arena-2027.png（土黃色）；高度規則沒寫，
+  這裡從水面上 10 cm 畫到水面下 40 cm。
+
+  只有外觀、沒有 collision（牆本身有）。模型原點在牆面上、水面高度、標記中心；
+  標記朝模型 +x（從池子裡看得到的那一面），寬度沿模型 y。
+  sim/referee.py 用模型原點 ± 0.5 m 判斷出發時碰牆的位置在不在標記範圍內。
+-->
+<sdf version="1.9">
+  <model name="start_marker">
+    <static>true</static>
+    <link name="marker">
+      <visual name="visual">
+        <pose>0.004 0 -0.15 0 0 0</pose>
+        <geometry><box><size>0.008 1.0 0.5</size></box></geometry>
+        <material>
+          <ambient>0.72 0.55 0.08 1</ambient>
+          <diffuse>0.72 0.55 0.08 1</diffuse>
+          <specular>0.02 0.02 0.02 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

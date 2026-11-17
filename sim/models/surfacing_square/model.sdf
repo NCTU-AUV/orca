@@ -1,0 +1,98 @@
+<?xml version="1.0"?>
+<!--
+  Surfacing Square（2027 新增），SAUVC 2027 Rulebook 2027.3.2：浮在水面的 200 x 200 cm 框，
+  下方約 30 cm 掛藍色標記，讓水下看得到。照 docs/sim/reference/surfacing-square-2027.png。
+  規則：過完導航門之後，在框內上浮而且完全沒碰到框，加 20 分；碰到任何一邊或在框外上浮，
+  只剩上浮本身的 5 分（sim/referee.py）。
+
+  白色 PVC 框（外緣 200 cm，管徑 5 cm，一半露出水面）加四個角各一根 30 cm 的藍色標記。
+  官方圖只畫了側視，看得到兩端各一根；放在四個角是假設。
+  static：實際上是用繩子固定的浮框，被撞會漂開一點，這裡直接固定。
+  模型原點在水面、框的中心。sim/referee.py 的 SQUARE_INNER 要跟這裡的內緣（±0.95 m）一致。
+
+  注意：RF-DETR v2 的 8 個類別裡沒有這個框，也沒有藍色標記。
+-->
+<sdf version="1.9">
+  <model name="surfacing_square">
+    <static>true</static>
+
+    <link name="frame">
+      <visual name="side_y_neg">
+        <pose>0 -0.975 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_y_neg">
+        <pose>0 -0.975 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+      </collision>
+      <visual name="side_y_pos">
+        <pose>0 0.975 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_y_pos">
+        <pose>0 0.975 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+      </collision>
+      <visual name="side_x_neg">
+        <pose>-0.975 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_x_neg">
+        <pose>-0.975 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+      </collision>
+      <visual name="side_x_pos">
+        <pose>0.975 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_x_pos">
+        <pose>0.975 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>2.0</length></cylinder></geometry>
+      </collision>
+    </link>
+
+    <!-- 藍色標記：從框往下 30 cm（z = -0.025 ~ -0.325） -->
+    <link name="markers">
+      <visual name="marker_0">
+        <pose>-0.975 -0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+        <material><ambient>0.05 0.10 0.95 1</ambient><diffuse>0.05 0.10 0.95 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <collision name="marker_0">
+        <pose>-0.975 -0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+      </collision>
+      <visual name="marker_1">
+        <pose>0.975 -0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+        <material><ambient>0.05 0.10 0.95 1</ambient><diffuse>0.05 0.10 0.95 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <collision name="marker_1">
+        <pose>0.975 -0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+      </collision>
+      <visual name="marker_2">
+        <pose>0.975 0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+        <material><ambient>0.05 0.10 0.95 1</ambient><diffuse>0.05 0.10 0.95 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <collision name="marker_2">
+        <pose>0.975 0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+      </collision>
+      <visual name="marker_3">
+        <pose>-0.975 0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+        <material><ambient>0.05 0.10 0.95 1</ambient><diffuse>0.05 0.10 0.95 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <collision name="marker_3">
+        <pose>-0.975 0.975 -0.175 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.30</length></cylinder></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

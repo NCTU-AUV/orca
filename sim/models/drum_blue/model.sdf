@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!--
+  由 tools/sim/gen_assets.py 產生，不要手改：改那支再重跑
+
+  藍 drum：球進去 30 分。SAUVC 2027 Rulebook 2027.3.2：直徑 60 cm、深 30 cm，放在綠墊上。
+  外形照 docs/sim/reference/drums-2017.jpg 與隊上的實拍：上寬下窄的塑膠盆（錐度、壁厚是估的）。
+  外觀是 mesh（drum_red/meshes/tub.obj，三種 drum 共用）；碰撞是盆底一片圓板加一圈 16 塊 box，
+  中間是空的，球掉得進去、留得住。static。模型原點在盆底中心。
+  哪個模型放在綠墊的哪個位置由世界檔決定（比賽會隨機）；sim/referee.py 用模型的 uri 名稱
+  （drum_blue／drum_red_pinger／drum_red）決定球進去的分數。
+-->
+<sdf version="1.9">
+  <model name="drum_blue">
+    <static>true</static>
+    <link name="tub">
+      <visual name="tub">
+        <geometry><mesh><uri>model://drum_red/meshes/tub.obj</uri></mesh></geometry>
+        <material><ambient>0.1 0.25 0.75 1</ambient><diffuse>0.1 0.25 0.75 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+      </visual>
+      <collision name="bottom">
+        <pose>0 0 0.006 0 0 0</pose>
+        <geometry><cylinder><radius>0.26</radius><length>0.012</length></cylinder></geometry>
+      </collision>
+      <collision name="wall_0"><pose>0.2740 0.0000 0.15 0 0 0.00000</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_1"><pose>0.2531 0.1049 0.15 0 0 0.39270</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_2"><pose>0.1937 0.1937 0.15 0 0 0.78540</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_3"><pose>0.1049 0.2531 0.15 0 0 1.17810</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_4"><pose>0.0000 0.2740 0.15 0 0 1.57080</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_5"><pose>-0.1049 0.2531 0.15 0 0 1.96350</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_6"><pose>-0.1937 0.1937 0.15 0 0 2.35619</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_7"><pose>-0.2531 0.1049 0.15 0 0 2.74889</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_8"><pose>-0.2740 0.0000 0.15 0 0 3.14159</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_9"><pose>-0.2531 -0.1049 0.15 0 0 3.53429</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_10"><pose>-0.1937 -0.1937 0.15 0 0 3.92699</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_11"><pose>-0.1049 -0.2531 0.15 0 0 4.31969</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_12"><pose>-0.0000 -0.2740 0.15 0 0 4.71239</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_13"><pose>0.1049 -0.2531 0.15 0 0 5.10509</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_14"><pose>0.1937 -0.1937 0.15 0 0 5.49779</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+      <collision name="wall_15"><pose>0.2531 -0.1049 0.15 0 0 5.89049</pose><geometry><box><size>0.012 0.1178 0.3</size></box></geometry></collision>
+    </link>
+  </model>
+</sdf>

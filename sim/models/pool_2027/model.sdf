@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<!--
+  由 tools/sim/gen_assets.py 產生，不要手改：改那支再重跑
+
+  SAUVC 2027 泳池：50 x 25 m olympic。模型原點在泳池的一個角落、水面上：
+    x = 0 ~ 50：長邊。x = 0 是資格賽起點那面牆，主場地在 x 大的那一端
+    y = 0 ~ 25：短邊（決賽的跑道方向）
+    z = 0：水面，往下為負
+  池底照 docs/sim/reference/arena-2027.png 側視圖的標註：牆邊 1.28 m 深的平台長 1.8 m，
+  接水平長 17.5 m 的斜坡，x = 19.3 m 之後是 2.0 m 的平底。
+  （rulebook 圖說寫「資格賽門處 1.28 m」，跟圖上的標註對不上；2026-11-17 決定照圖上的標註，
+  資格賽門 x = 10 m 處水深約 1.62 m。）
+  磁磚、水道線、牆上的十字是照實拍照片畫的，規則沒有規定。
+  比賽道具不放在這裡，由世界檔另外 <include>。碰撞體所在的 link 名稱以 floor_／wall_ 開頭，
+  sim/referee.py 用它分辨碰到的是池底還是池壁。
+-->
+<sdf version="1.9">
+  <model name="pool">
+    <static>true</static>
+
+    <link name="floor_shelf">
+      <pose>0.9 12.5 -1.28 0 0 0</pose>
+      <collision name="collision">
+        <pose>0 0 -0.25 0 0 0</pose>
+        <geometry><box><size>1.8000 25.0 0.5</size></box></geometry>
+      </collision>
+      <visual name="visual">
+        <geometry><plane><normal>0 0 1</normal><size>1.8000 25.0</size></plane></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/floor_shelf.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+
+    <link name="floor_slope">
+      <pose>10.55 12.5 -1.6400000000000001 0 0.041120 0</pose>
+      <collision name="collision">
+        <pose>0 0 -0.25 0 0 0</pose>
+        <geometry><box><size>17.5148 25.0 0.5</size></box></geometry>
+      </collision>
+      <visual name="visual">
+        <geometry><plane><normal>0 0 1</normal><size>17.5148 25.0</size></plane></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/floor_slope.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+
+    <link name="floor_deep">
+      <pose>34.65 12.5 -2.0 0 0 0</pose>
+      <collision name="collision">
+        <pose>0 0 -0.25 0 0 0</pose>
+        <geometry><box><size>30.7000 25.0 0.5</size></box></geometry>
+      </collision>
+      <visual name="visual">
+        <geometry><plane><normal>0 0 1</normal><size>30.7000 25.0</size></plane></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/floor_deep.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+
+    <link name="wall_x0">
+      <pose>-0.15 12.5 -0.9999999999999999 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>0.3 25.0 2.5999999999999996</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>0.3 25.0 2.5999999999999996</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/wall_end.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+
+    <link name="wall_x50">
+      <pose>50.15 12.5 -0.9999999999999999 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>0.3 25.0 2.5999999999999996</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>0.3 25.0 2.5999999999999996</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/wall_end.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+
+    <link name="wall_y0">
+      <pose>25.0 -0.15 -0.9999999999999999 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>50.6 0.3 2.5999999999999996</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>50.6 0.3 2.5999999999999996</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/wall_side.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+
+    <link name="wall_y25">
+      <pose>25.0 25.15 -0.9999999999999999 0 0 0</pose>
+      <collision name="collision"><geometry><box><size>50.6 0.3 2.5999999999999996</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>50.6 0.3 2.5999999999999996</size></box></geometry>
+        <material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular><pbr><metal><albedo_map>model://pool_2027/materials/textures/wall_side.png</albedo_map><metalness>0</metalness><roughness>0.6</roughness></metal></pbr></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<!--
+  由 tools/sim/gen_assets.py 產生，不要手改：改那支再重跑
+
+  水：讓場景看起來在水下。模型原點同 pool_2027（泳池角落、水面上）。世界檔把它（和 particle 的
+  world plugin）夾在 UNDERWATER:BEGIN ／ UNDERWATER:END 之間，UNDERWATER=0 時 sim/start.sh 會把
+  那一段拿掉，回到沒有水的乾淨畫面。全部沒有 collision、不投影。
+
+    surface_under  水面的底面（面朝下、不透明、自發光的波紋貼圖）。相機與 Gazebo 視窗都看得到：
+                   在水下往前看時，畫面上緣的水面是全反射，看起來就是一片亮青色的波紋。
+    surface_top    水面的頂面（面朝上、半透明的水色）。只有從水面上看得到（Gazebo 視窗的預設視角）；
+                   水下的相機在它的背面，看不到它。
+    haze           水體霧：Harmonic 的 ogre2 沒有 fog，用一堆很淡的大顆 particle 疊出「越遠越藍」，
+                   給 Gazebo 視窗看。相機影像的衰減不靠它，是 sim/underwater.py 用深度圖算的：
+                   particle 本來就不會進 depth camera；彩色相機用 visibility_mask 0x0FEFFFFF
+                   把 particle（flag 0x00100000）排除（見 model://orca_cam）。
+                   世界檔要載 gz-sim-particle-emitter-system 才會有粒子。
+                   Gazebo 會印三行「ParticleEmitter SetColorRange is currently disabled」，是正常的。
+-->
+<sdf version="1.9">
+  <model name="water">
+    <static>true</static>
+    <link name="surface">
+      <visual name="surface_under">
+        <pose>25.0 12.5 -0.002 0 0 0</pose>
+        <geometry><mesh><uri>model://water/meshes/surface_under.obj</uri></mesh></geometry>
+        <cast_shadows>false</cast_shadows>
+        <material>
+          <ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><specular>0 0 0 1</specular>
+          <emissive>0.75 0.75 0.75 1</emissive>
+          <pbr><metal>
+            <albedo_map>model://water/materials/textures/surface_under.png</albedo_map>
+            <emissive_map>model://water/materials/textures/surface_under.png</emissive_map>
+            <metalness>0</metalness><roughness>1</roughness>
+          </metal></pbr>
+        </material>
+      </visual>
+      <visual name="surface_top">
+        <pose>25.0 12.5 0 0 0 0</pose>
+        <geometry><plane><normal>0 0 1</normal><size>50.0 25.0</size></plane></geometry>
+        <transparency>0.5</transparency>
+        <cast_shadows>false</cast_shadows>
+        <material><ambient>0.10 0.50 0.78 1</ambient><diffuse>0.10 0.50 0.78 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+      </visual>
+    </link>
+    <link name="haze">
+      <!-- size 的三個數依序對應模型的 y、z、x（實測，跟直覺不同）：這裡是 x 48、y 23、z 0.6 m 的薄層，
+           粒子直徑 2 m，所以霧大約佔滿 z = -2.3 ~ -0.3，不會冒出水面或池壁。
+           同時存在的粒子數 = rate x lifetime = 480。 -->
+      <particle_emitter name="haze" type="box">
+        <pose>25.0 12.5 -1.3 0 0 0</pose>
+        <emitting>true</emitting>
+        <size>23.0 0.6 48.0</size>
+        <particle_size>2 2 2</particle_size>
+        <lifetime>30</lifetime>
+        <rate>16</rate>
+        <min_velocity>0.005</min_velocity>
+        <max_velocity>0.02</max_velocity>
+        <scale_rate>0</scale_rate>
+        <particle_scatter_ratio>0</particle_scatter_ratio>
+        <material>
+          <diffuse>0.03 0.42 0.72 1</diffuse>
+          <pbr><metal><albedo_map>model://water/materials/textures/haze.png</albedo_map></metal></pbr>
+        </material>
+      </particle_emitter>
+    </link>
+  </model>
+</sdf>

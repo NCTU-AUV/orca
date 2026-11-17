@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!--
+  決賽起始區，SAUVC 2027 Rulebook 2027.3.2：水面上 140 x 140 cm 的區域。AUV 只能放在水面，
+  要自己完全下潛之後才能離開起始區。
+
+  外形照 docs/sim/reference/starting-zone-2022.jpg：浮在水面的白色 PVC 框。內緣 140 cm
+  （管中心 ±0.72 m，管徑 4 cm，一半露出水面）。有 collision：沒下潛就往外開會被框擋住。
+  static（實際上是浮框）。模型原點在水面、框的中心。
+  sim/referee.py 的 START_ZONE_INNER 要跟這裡的內緣（±0.70 m）一致。
+-->
+<sdf version="1.9">
+  <model name="start_zone">
+    <static>true</static>
+    <link name="frame">
+      <visual name="side_y_neg">
+        <pose>0 -0.72 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_y_neg">
+        <pose>0 -0.72 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+      </collision>
+      <visual name="side_y_pos">
+        <pose>0 0.72 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_y_pos">
+        <pose>0 0.72 0 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+      </collision>
+      <visual name="side_x_neg">
+        <pose>-0.72 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_x_neg">
+        <pose>-0.72 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+      </collision>
+      <visual name="side_x_pos">
+        <pose>0.72 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+        <material><ambient>0.94 0.95 0.96 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+      </visual>
+      <collision name="side_x_pos">
+        <pose>0.72 0 0 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.02</radius><length>1.48</length></cylinder></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>
