@@ -23,6 +23,7 @@ if [[ $GUI == 1 ]]; then
   xhost +SI:localuser:root > /dev/null
 fi
 
+docker compose build simulator     # Dockerfile 改過才會真的重 build，平常幾秒
 docker compose --profile vision up -d fc_adapter sim_dropper sim_cameras object_detector
 docker compose up -d --force-recreate simulator sim_referee
 

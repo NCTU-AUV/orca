@@ -22,6 +22,7 @@ export GIT_REV=${GIT_REV:-$(git -C ../.. describe --always --dirty 2>/dev/null |
 if [[ ! -f ../../ml/rfdetr/weights/checkpoint_best_total.pth ]]; then
   ../../ml/rfdetr/fetch_weights.sh
 fi
+docker compose build simulator     # sim_sweep 用 orca-sim；Dockerfile 改過才會真的重 build
 docker compose --profile sweep build detect_eval > /dev/null
 docker compose --profile sweep run --rm sim_sweep
 docker compose --profile sweep run --rm detect_eval python3 -u /orca/tools/sim_detect/evaluate.py "/out/$RUN"

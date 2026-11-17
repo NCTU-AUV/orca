@@ -37,8 +37,9 @@ fi
 VISION=0
 if grep -q 'model://orca_cam' "../../sim/worlds/$WORLD"; then VISION=1; fi
 
-# mission 的 image 疊在 orca-base 上，要先 build orca-base（recorder 也用 orca-base）
-docker compose build fc_adapter
+# mission 的 image 疊在 orca-base 上，要先 build orca-base（recorder 也用 orca-base）。
+# simulator（orca-sim）也 build：Dockerfile 改過（例如加了 OpenCV）時才會真的重 build，平常幾秒
+docker compose build simulator fc_adapter
 docker compose --profile mission build mission
 if [[ $VISION == 1 ]]; then
   # sim_cameras 的水下效果跟 UNDERWATER 走，設定變了 compose 會自己重建它

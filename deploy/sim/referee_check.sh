@@ -14,6 +14,7 @@ export GUI=0
 worlds=("$@")
 if [[ ${#worlds[@]} -eq 0 ]]; then worlds=(sauvc_final.sdf sauvc_qual.sdf); fi
 
+docker compose build simulator     # Dockerfile 改過才會真的重 build，平常幾秒
 status=0
 for world in "${worlds[@]}"; do
   export WORLD=$world

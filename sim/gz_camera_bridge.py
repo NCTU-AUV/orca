@@ -38,7 +38,18 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from underwater import Underwater  # noqa: E402
+try:
+    from underwater import Underwater  # noqa: E402
+    UNDERWATER_ERROR = None
+except ImportError as e:                # orca-sim image 是加 OpenCV 之前 build 的
+    UNDERWATER_ERROR = e
+
+    class Underwater:                   # noqa: D101  沒有水下效果，影像原封不動
+        def __init__(self, hfov):
+            self.enabled, self.strength = False, 0.0
+
+        def apply(self, rgb, depth):
+            return rgb
 
 RGB_INT8 = 3        # gz.msgs.PixelFormatType
 R_FLOAT32 = 13
@@ -74,6 +85,9 @@ class CameraBridge(Node):
             self.cams.append(cam)
             self.get_logger().info(f'{name}: {gz_topic} → {img_topic}、{info_topic}')
 
+        if UNDERWATER_ERROR is not None:
+            self.get_logger().error(f'水下效果不能用（{UNDERWATER_ERROR}）：orca-sim image 太舊，'
+                                    '在 deploy/sim 跑 docker compose build simulator。影像先原封不動轉送')
         uw = self.cams[0]['uw']
         self.declare_parameter('underwater', uw.enabled)
         self.declare_parameter('underwater_strength', uw.strength)
@@ -83,6 +97,8 @@ class CameraBridge(Node):
 
     # ---- 水下效果的開關
     def set_underwater(self, enabled, strength):
+        if UNDERWATER_ERROR is not None:
+            enabled = False
         for cam in self.cams:
             cam['uw'].enabled, cam['uw'].strength = enabled, strength
             if enabled and not cam['depth_sub']:
