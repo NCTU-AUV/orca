@@ -55,7 +55,7 @@ docker compose down                         # 全部關掉
 ./run.sh                       # build（第一次）並啟動 simulator、fc_adapter，前景執行，Ctrl-C 結束
 GUI=0 ./run.sh                 # 不開 Gazebo 視窗
 WORLD=<檔名> ./run.sh          # 換 sim/worlds/ 底下的世界檔
-./mission.sh                   # 行為樹過門：有門、相機、偵測的世界（orca_qgate.sdf），見 docs/sim/README.md
+./mission.sh                   # 行為樹過門：SAUVC 2027 資格賽（sauvc_qual.sdf），見 docs/sim/README.md
 ./gate_pass.sh                 # 舊版過門（mission/gate_pass.py）
 ```
 

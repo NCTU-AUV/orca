@@ -105,3 +105,23 @@
       print(m)
   ```
   常用的訊息：`ATT`（`DesYaw` 目標航向、`Yaw` 實際航向）、`RATE`（`YDes` 目標角速度、`YOut` 控制器出力）、`CTUN`（`DAlt` 目標深度、`Alt` EKF 深度、`BAlt` 深度計）、`BARO`（原始水壓）。PID 各分量（`PIDY` 等）預設不記，要在解鎖前把 `LOG_BITMASK` 加上第 12 位元（4096），只對這次開機有效。
+
+## SAUVC 2027 世界（2026-11-17）
+
+重建世界（[world-2027.md](world-2027.md)）時遇到的。
+
+- **Buoyancy 會對 link 上所有 collision 的體積加總**：船的 `main_body_buoyancy` 同時是浮力體，為了判斷碰撞另外加形狀，浮力就會失真。做法：碰撞外框放在另一個 link（`orca_cam` 的 `bumper_link`，fixed joint 接在 `base_link`），世界檔的 Buoyancy 寫 `<enable>orca::base_link</enable>`，只對 `base_link` 算。**漏了 `<enable>` 船會像氣球一樣彈出水面。** 有寫 `<enable>` 時，沒列到的東西都沒有浮力，所以道具的質量直接用「扣掉浮力後的等效值」，會沉的球（flare 頂端的高爾夫球、放球機構的球）要列進去。
+- **gz-transport 的 Python 綁定在有訂閱的行程裡送 service 請求，常常等不到回應**（server 早就回了，用 `gz service` 命令列送同一個請求是好的）。有高頻訂閱（`/world/<名稱>/clock`、影像、`dynamic_pose/info`）時幾乎每次都逾時。看起來是收回應的執行緒卡在等 GIL 的訂閱 callback 上。處理：請求交給沒有任何訂閱的子行程送（`sim/gzreq.py`）。`sim/referee.py` 的 `scene/info` 請求沒改，失敗了每秒重試。
+- **orca-sim image 裡的 gz Python 綁定要先 `source /opt/ros/humble/setup.bash`**，不然 service 請求一律失敗、訂閱的 callback 報 `No message class registered`。compose 裡用到 gz Python 的服務都先 source。
+- **`set_pose` 只改位置，不會把速度歸零**：瞬移之後船帶著原本的速度繼續滑。測試裡先瞬移、等阻力把速度吃掉，再瞬移一次（`referee_check.py` 的 `teleport`）。static 模型也可以用 `set_pose` 搬（偵測驗證的相機就是 static）。
+- **`ApplyLinkWrench` 用 `/world/<名稱>/entity/system/add` 動態載入時，回應常常比 3 秒還晚**，但系統其實已經載入了；重送會載入第二份（力加倍）。所以改成寫在世界檔裡。
+- **Harmonic 的 ogre2 沒有 fog**：相機影像的水下效果用 depth camera 做後處理（`sim/underwater.py`）。Gazebo 視窗的水體霧用 particle emitter：
+  - `<particle_emitter type="box">` 的 `<size>` 三個數依序對應模型的 **y、z、x**（實測），不是 x、y、z。
+  - `<color_start>`／`<color_end>` 沒有作用（啟動時印三行 `ParticleEmitter SetColorRange is currently disabled`），顏色用 material 的 diffuse，透明度用貼圖的 alpha。
+  - particle 的 visibility flag 是 `0x00100000`；相機的 `<visibility_mask>` 設 `0x0FEFFFFF` 就看不到它。depth camera 本來就不含 particle。
+  - **segmentation camera 碰到 particle 會讓 gz server 當掉**（`Ogre2SegmentationCamera` 的 `ItemIdentityException`），visibility mask 也擋不住。偵測驗證用的世界把水體霧拿掉（相機本來就看不到它，影像一樣）。
+- **Gazebo 視窗的相機看不到 visibility flag 高於 0x0FFFFFFF 的 visual**，一般相機感測器預設也看不到（預設 mask 是 0x0FFFFFFF）。
+- **貼圖的 UV**：`<plane>` 是影像左 → 右 = +x、影像上方 = +y；`<box>` 的側面是「從外面看過去左 → 右、上方 = +z」。OBJ mesh 沒有 `.mtl` 時 gz 會印 `Missing material`，所以附一個空的。
+- **DetachableJoint 的 child model 要寫在 parent 的 `<include>` 前面**，不然啟動時找不到（`Child Model ... could not be found`），球不會被固定。
+- **OpenCV 的版本**：orca-sim 的 numpy 是 apt 的 1.21；opencv-python-headless 4.7 之後的 `cv2.typing` 需要 numpy ≥ 1.22，import 會失敗，所以鎖在 4.6.0.66（`--no-deps`）。
+- **自訂的 SDF 元素**：`<orca:referee>`（`xmlns:orca` 宣告在 `<sdf>` 上）Gazebo 不認得、會略過，`sim/referee.py` 自己讀世界檔取設定。
