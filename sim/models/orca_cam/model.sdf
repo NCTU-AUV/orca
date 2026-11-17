@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <!--
-  Orca 加前視、底部兩顆相機。model://orca 用 merge 原封不動併進來（推進器、ArduPilotPlugin、
-  thruster topic 的 /model/orca/... 都不變），這裡只多相機 link 和固定 joint。
-  有用到相機的世界檔改 include 這個模型，名字一樣取 orca。
+  Orca 加前視、底部兩顆相機，以及碰撞外框。model://orca 用 merge 原封不動併進來（推進器、
+  ArduPilotPlugin、thruster topic 的 /model/orca/... 都不變），這裡只多相機、外框的 link 和固定 joint。
+  有道具的世界檔 include 這個模型，名字一樣取 orca。
 
-  相機：640x480、15 Hz。水平視角 55.7°（fx = 606 px），對齊實機 D435i 彩色 640x480 的
+  相機：640x480、15 Hz、看到 60 m（泳池長 50 m，看得到另一頭的牆）。水平視角 55.7°（fx = 606 px），對齊實機 D435i 彩色 640x480 的
   camera_info（docs/laptop-rpi-relay.md 的實測）。位置在船頭前緣中線，跟實機的安裝位置
   不一定相同，之後量到再改 pose。
   Gazebo 的影像在 gz topic /orca/camera/image，由 sim/gz_camera_bridge.py 轉成 ROS。
@@ -12,7 +12,22 @@
   底部相機：640x480、10 Hz、水平視角 70°（實機的底部 USB 相機規格還沒定，之後換成實測值）。
   裝在船底中線、船頭方向 0.1 m，朝正下方；影像上方 = 船頭、右方 = 右舷
   （src/orca_mission/config/orca.yaml 照這個方向）。gz topic /orca/bottom_camera/image。
-  水下的光線衰減、色偏沒有模擬（Harmonic 的 ogre2 不支援 fog），畫面比實際清楚。
+
+  水下效果（越遠越暗、偏藍、模糊、噪點）不是在 Gazebo 裡算的（Harmonic 的 ogre2 不支援 fog）：
+  每顆相機旁邊多一顆同位置、同視角的 depth camera（320x240，gz topic .../depth），
+  sim/gz_camera_bridge.py 用深度圖對彩色影像做後處理（sim/underwater.py）。depth camera
+  只有 bridge 訂閱時才算圖；它不會變成 ROS topic，ROS 這邊的影像 topic、frame_id、camera_info 都不變。
+  彩色相機的 visibility_mask 設成 0x0FEFFFFF（267386879）：把 particle（flag 0x00100000）排除，
+  看不到 model://water 裡給 Gazebo 視窗看的水體霧；depth camera 本來就不含 particle。
+
+  碰撞外框（bumper_link）：model://orca 唯一的 collision 是 main_body_buoyancy（0.6 x 0.2 x 0.2 的
+  浮力體），比實際的船小很多（機架寬 34 cm、推進器外緣到 ±29 cm），拿它判斷「有沒有碰到門」
+  會太寬鬆。這裡照機架與推進器的外形另外放一組 collision，並在上面掛 contact sensor：
+  船碰到任何東西都會發到 gz topic /orca/contacts（gz.msgs.Contacts，含對方 collision 的名稱），
+  sim/referee.py 讀它。
+  **浮力**：Buoyancy 會對有 collision 的 link 算浮力，外框的體積不能算進去。所以用到這個模型的
+  世界檔，Buoyancy 一定要寫 <enable>orca::base_link</enable>（只對 base_link 算，行為跟
+  model://orca 完全一樣）。漏掉的話船會像氣球一樣彈出水面。
 -->
 <sdf version="1.9">
   <model name="orca">
@@ -40,7 +55,20 @@
         <camera>
           <horizontal_fov>0.9725</horizontal_fov>
           <image><width>640</width><height>480</height><format>R8G8B8</format></image>
-          <clip><near>0.05</near><far>30</far></clip>
+          <clip><near>0.05</near><far>60</far></clip>
+          <visibility_mask>267386879</visibility_mask>
+        </camera>
+      </sensor>
+      <!-- 水下效果用的深度（公尺，沿光軸），位置、視角同 front_camera -->
+      <sensor name="front_depth" type="depth_camera">
+        <pose>0.02 0 0 0 0 0</pose>
+        <always_on>1</always_on>
+        <update_rate>15</update_rate>
+        <topic>/orca/camera/depth</topic>
+        <camera>
+          <horizontal_fov>0.9725</horizontal_fov>
+          <image><width>320</width><height>240</height><format>R_FLOAT32</format></image>
+          <clip><near>0.05</near><far>60</far></clip>
         </camera>
       </sensor>
     </link>
@@ -70,6 +98,18 @@
           <horizontal_fov>1.2217</horizontal_fov>
           <image><width>640</width><height>480</height><format>R8G8B8</format></image>
           <clip><near>0.05</near><far>10</far></clip>
+          <visibility_mask>267386879</visibility_mask>
+        </camera>
+      </sensor>
+      <sensor name="bottom_depth" type="depth_camera">
+        <pose>0 0 -0.012 0 1.5707963268 0</pose>
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+        <topic>/orca/bottom_camera/depth</topic>
+        <camera>
+          <horizontal_fov>1.2217</horizontal_fov>
+          <image><width>320</width><height>240</height><format>R_FLOAT32</format></image>
+          <clip><near>0.05</near><far>10</far></clip>
         </camera>
       </sensor>
     </link>
@@ -77,6 +117,76 @@
     <joint name="bottom_camera_joint" type="fixed">
       <parent>base_link</parent>
       <child>bottom_camera_link</child>
+    </joint>
+
+    <!-- 碰撞外框：位置同 base_link。hull、frame 對應 model://orca 的兩個 visual，
+         thruster_N 對應八顆推進器（半徑 5 cm、長 11.3 cm）。 -->
+    <link name="bumper_link">
+      <inertial>
+        <mass>0.01</mass>
+        <inertia><ixx>1e-5</ixx><iyy>1e-5</iyy><izz>1e-5</izz></inertia>
+      </inertial>
+      <collision name="hull">
+        <pose>0 0 0.115 0 0 0</pose>
+        <geometry><box><size>0.6 0.2 0.2</size></box></geometry>
+      </collision>
+      <collision name="frame">
+        <pose>0 0 -0.07 0 0 0</pose>
+        <geometry><box><size>0.6 0.34 0.14</size></box></geometry>
+      </collision>
+      <collision name="thruster_0">
+        <pose>0.15 0.237 0 0 0 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_1">
+        <pose>0.15 -0.237 0 0 0 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_2">
+        <pose>-0.15 0.237 0 0 0 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_3">
+        <pose>-0.15 -0.237 0 0 0 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_4">
+        <pose>0.2965 0.213 0 0 1.5707963268 -0.7853981634</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_5">
+        <pose>0.2965 -0.213 0 0 1.5707963268 0.7853981634</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_6">
+        <pose>-0.2965 0.213 0 0 1.5707963268 0.7853981634</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <collision name="thruster_7">
+        <pose>-0.2965 -0.213 0 0 1.5707963268 -0.7853981634</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+      </collision>
+      <sensor name="contact" type="contact">
+        <always_on>1</always_on>
+        <contact>
+          <collision>hull</collision>
+          <collision>frame</collision>
+          <collision>thruster_0</collision>
+          <collision>thruster_1</collision>
+          <collision>thruster_2</collision>
+          <collision>thruster_3</collision>
+          <collision>thruster_4</collision>
+          <collision>thruster_5</collision>
+          <collision>thruster_6</collision>
+          <collision>thruster_7</collision>
+          <topic>/orca/contacts</topic>
+        </contact>
+      </sensor>
+    </link>
+
+    <joint name="bumper_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>bumper_link</child>
     </joint>
   </model>
 </sdf>

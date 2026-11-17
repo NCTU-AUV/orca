@@ -1,0 +1,3 @@
+# 由 tools/sim/gen_assets.py 產生，不要手改：改那支再重跑
+newmtl surface
+Kd 1 1 1

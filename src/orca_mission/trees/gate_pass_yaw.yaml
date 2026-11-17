@@ -1,0 +1,84 @@
+# 過門（行為樹），先轉向對準門再鎖航向。流程圖：gate_pass_yaw.md（render_tree 產生）
+# 跟 gate_pass.yaml 的差別：下潛之後先原地轉 yaw，讓門中心落在船頭正前方，對準後把當下的航向鎖住；
+# 之後的流程（sway 平移對準 → 接近 → 盲走 → 停 → 上鎖）跟 gate_pass.yaml 一樣，航向不再變。
+#
+#   ros2 run orca_mission mission gate_pass_yaw                   # 實機（會列檢查清單、等 Enter）
+#   ros2 run orca_mission mission gate_pass_yaw --no-checklist    # 模擬
+#   ros2 run orca_mission mission gate_pass_yaw -p align_tol=5    # 覆寫 vars
+#
+# 樹結束（成功或失敗）、逾時、Ctrl-C 都會 MANUAL、全 0、DISARM（node.py），船浮上來。
+name: gate_pass_yaw
+description: >
+  歸零（浮在水面）→ 解鎖 → 下潛 → 原地轉 yaw 對準門（門中心方位 ≤ ±align_tol 度）→
+  鎖住當下的航向 → 原地用 sway 平移，讓門中心落在船頭正前方（偏離 ≤ 門寬 × center_tol）→
+  前進、左右只用 sway 修 → 門框再寬都不停，直到完全看不到門 → 盲走 pass_s 秒 → 停 → 上鎖。
+
+vars:
+  depth: 0.30           # 過門深度 [m]
+  surge: 0.2            # 前進推力
+  pass_s: 7.0           # 完全看不到門之後盲走幾秒（水平沒有定位，只能用時間估）
+  labels: [gate, qualification_gate]
+  min_score: 0.5
+  align_tol: 3.0        # 轉向對準的門檻：門中心的方位角 ≤ ±align_tol 度
+  center_tol: 0.1       # 平移對準的門檻：船偏離門中線 ≤ 門寬 × center_tol（1.5 m 門 → ±15 cm）
+  ready_timeout: 60     # 等飛控、adapter、相機、偵測就緒最多幾秒（模型第一次載入比較久）
+
+root:
+  type: Sequence
+  name: 過門（轉向對準）
+  children:
+    - type: WaitReady
+      name: 等就緒
+      cameras: [front]
+      detections: true
+      timeout: $ready_timeout
+
+    - type: Confirm
+      name: 檢查清單
+      checklist:
+        - 船浮在水面、靜止，船頭大致朝向門（下潛後只會轉向對準看得到的門，不會轉頭找）
+        - 門在相機前方、看得到（/detections/image 有框到門）
+        - 繩子綁好，kill switch 在手邊
+        - QGC 的 joystick 關閉
+        - mavproxy 的 log 已出現 MAG0 initial yaw alignment complete
+
+    - {type: Zero, name: 歸零}
+    - {type: Arm, name: 解鎖, depth: $depth}
+
+    - type: Sequence
+      name: 下水之後
+      timeout: 180      # 從解鎖後算，整段的上限（同 gate_pass.py 的 mission_timeout）
+      children:
+        - type: Dive
+          name: 下潛
+          depth: $depth
+          tol: 0.03
+          stable_s: 2.0
+          timeout: 40
+
+        # 對準後把當下的航向設成目標航向；之後的執行器都沿用這個航向，不再轉
+        - type: AlignTo
+          name: 轉向對準門
+          labels: $labels
+          min_score: $min_score
+          tol: $align_tol
+
+        - type: CenterGate
+          name: 平移對準門
+          labels: $labels
+          min_score: $min_score
+          tol: $center_tol
+
+        - type: ApproachGate
+          name: 接近門
+          labels: $labels
+          min_score: $min_score
+          surge: $surge
+
+        - type: Cruise
+          name: 盲走過門
+          surge: $surge
+          seconds: $pass_s
+
+        - {type: Hold, name: 停, seconds: 2.0}
+        - {type: Finish, name: 上鎖}

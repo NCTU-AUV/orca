@@ -4,13 +4,22 @@
 # 過門（有門、相機、偵測的世界）：
 #   ./mission.sh                  行為樹版（src/orca_mission/trees/gate_pass.yaml，mission 服務）
 #   ./gate_pass.sh                舊版（mission/gate_pass.py，在 fc_adapter 容器裡跑）
-#   sim_cameras、object_detector 在 vision profile、recorder 在 record profile、mission 在 mission profile，
-#   平常的 ./run.sh 不會起它們
+#   sim_cameras、object_detector 在 vision profile（./run.sh 遇到有相機的世界會一起起），
+#   recorder 在 record profile、mission 在 mission profile，./run.sh 不會起它們
+# 偵測驗證（模擬畫面丟給 RF-DETR，量「哪個道具在多遠偵測得到」）：./detect_sweep.sh，見 tools/sim_detect/
+#
+# 環境變數（./run.sh、./mission.sh 都吃）：
+#   WORLD=<檔名>            sim/worlds/ 底下的世界檔（run.sh 預設 orca_pool.sdf，mission.sh 預設 sauvc_qual.sdf）
+#   GUI=1|0                 開不開 Gazebo 視窗
+#   UNDERWATER=1|0          水下的樣子：世界裡的水面與水體霧、相機影像的水下後處理。0 = 全部關掉
+#   UNDERWATER_STRENGTH=1.0 相機影像水下效果的強度（0.5 更清澈、2 更混），細項見 sim/underwater.py
 #
 # 服務：
 #   simulator        Gazebo + ArduSub SITL + mavproxy
 #   fc_adapter       飛控介面：mavros + auv_adapter（/auv_control → ArduSub）。程式不改
-#   sim_cameras      Gazebo 的前視、底部相機 → ROS 影像（topic、frame_id 同實機）
+#   sim_referee      模擬裁判：碰撞、過門、掉球、上浮 → /sim/referee/events、分數（只有模擬有，任務程式不要訂閱）
+#   sim_dropper      放球指令 /ball_dropper/release（ROS，暫定介面）→ Gazebo 放開球
+#   sim_cameras      Gazebo 的前視、底部相機 → ROS 影像（topic、frame_id 同實機），含水下後處理
 #   object_detector  RF-DETR：影像 → /detections、畫好框的影像（原始、JPEG）
 #   recorder         每次任務錄一個 rosbag（MCAP），影像只錄畫好框的 JPEG
 #   mission          行為樹決策層（orca_mission）：/detections + mavros 狀態 → /auv_control
@@ -40,6 +49,7 @@ services:
       - GZ_PARTITION=orca_sim     # sim_cameras 要跟 simulator 同一個 partition 才看得到影像
       - WORLD=${WORLD:-orca_pool.sdf}
       - GUI=${GUI:-1}
+      - UNDERWATER=${UNDERWATER:-1}   # 0 = 世界裡不放水面與水體霧（sim/start.sh）
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../../sim:/sim:ro
@@ -51,6 +61,9 @@ services:
     build:
       context: ../..
       dockerfile: docker/base.Dockerfile
+      # build 指紋（docker/build-hash.sh 算的），跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+      labels:
+        orca.build-hash: ${ORCA_BASE_HASH:-}
     network_mode: host            # 收 mavproxy 送到 127.0.0.1:14551 的封包
     ipc: host
     init: true
@@ -67,6 +80,44 @@ services:
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, sitl]
 
+  # 模擬裁判（sim/referee.py）：讀 Gazebo 的碰撞與真值位姿，照 SAUVC 2027 規則發事件與分數到
+  # /sim/referee/events、/sim/referee/state（std_msgs/String，JSON），並寫進 logs/referee/<名稱>.jsonl。
+  # 計分規則看世界檔的 <orca:referee mode=...>；空池（orca_pool.sdf）沒有計分規則，只記下潛、出發這類一般事件。
+  # 重新計分：ros2 topic pub --once /sim/referee/reset std_msgs/msg/Empty（模擬重開也會自動重來）。
+  sim_referee:
+    image: orca-sim
+    network_mode: host
+    ipc: host
+    init: true
+    depends_on: [simulator]
+    environment:
+      <<: *ros-env
+      GZ_IP: 127.0.0.1
+      GZ_PARTITION: orca_sim
+      WORLD: ${WORLD:-orca_pool.sdf}
+      RUN_NAME: ${RUN_NAME:-}       # 紀錄檔的名稱；mission.sh 會設成 <樹>_<時間>，沒設就用啟動時間
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../sim:/sim:ro
+      - ./logs/referee:/logs
+    command: [bash, -c, "source /opt/ros/humble/setup.bash && exec python3 -u /sim/referee.py"]
+
+  # 放球指令（sim/gz_dropper_bridge.py）：ROS /ball_dropper/release（std_msgs/Empty，暫定介面）
+  # → Gazebo 放開掛在船底的球。只有 sauvc_final.sdf 有球，其他世界收到指令不會有事發生。
+  sim_dropper:
+    image: orca-sim
+    network_mode: host
+    ipc: host
+    init: true
+    depends_on: [simulator]
+    environment:
+      <<: *ros-env
+      GZ_IP: 127.0.0.1
+      GZ_PARTITION: orca_sim
+    volumes:
+      - ../../sim:/sim:ro
+    command: [bash, -c, "source /opt/ros/humble/setup.bash && exec python3 -u /sim/gz_dropper_bridge.py"]
+
   # 臨時工具，不會隨 up 啟動。鍵盤操控（主機先跑 xhost +SI:localuser:root，./run.sh 會跑）：
   #   docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
   gui_tools:
@@ -75,6 +126,11 @@ services:
     network_mode: host
     ipc: host
     init: true
+    # /dev/dri：容器裡的 Qt／pygame 用主機的 Intel iGPU 畫圖。沒有它 mesa 會報
+    # 「Failed to query drm device」、「failed to load driver: iris」，退回軟體算圖（慢）。
+    # 不用 NVIDIA：這些視窗不需要獨顯，主機的 GLX 本來也是走 iGPU。
+    devices:
+      - /dev/dri:/dev/dri
     environment:
       - ROS_LOCALHOST_ONLY=1
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
@@ -87,7 +143,10 @@ services:
 
   # Gazebo 相機（sim/models/orca_cam）→ ROS，topic、frame_id 跟實機一樣：
   #   前視 /camera/camera/color/image_raw、camera_info；底部 /bottom_camera/image_raw、camera_info
-  # 世界檔要用有相機的（orca_qgate.sdf、orca_gate.sdf）
+  # 世界檔要用有相機的（sauvc_qual.sdf、sauvc_final.sdf）。
+  # 轉成 ROS 之前先做水下成像的後處理（越遠越暗、偏藍、模糊、噪點；sim/underwater.py），
+  # camera_info 不受影響。UNDERWATER=0 完全關掉，影像原封不動。執行中也可以改：
+  #   docker compose exec sim_cameras bash -ic 'ros2 param set /sim_cameras underwater false'
   sim_cameras:
     image: orca-sim
     profiles: [vision]
@@ -99,6 +158,8 @@ services:
       <<: *ros-env
       GZ_IP: 127.0.0.1
       GZ_PARTITION: orca_sim
+      UNDERWATER: ${UNDERWATER:-1}
+      UNDERWATER_STRENGTH: ${UNDERWATER_STRENGTH:-1.0}
     volumes:
       - ../../sim:/sim:ro
     command: [python3, -u, /sim/gz_camera_bridge.py]
@@ -110,6 +171,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/perception-x86.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_PERCEPTION_HASH:-}
     profiles: [vision]
     network_mode: host
     ipc: host
@@ -124,7 +187,7 @@ services:
       - torch-cache:/root/.cache
     command: [ros2, run, orca_perception, detector]
 
-  # 把 topic 錄成 rosbag（MCAP），一個資料夾一次任務：./mission.sh 跑樹前開、樹結束後停，
+  # 把 topic 錄成 rosbag（MCAP），一個資料夾一次任務：./mission.sh 跑樹前開、樹結束且船浮上水面後停，
   # 存在 logs/bag/<樹>_<時間>/，跟 logs/mission/<樹>_<時間>.csv 同名（RECORD=0 ./mission.sh 不錄）。
   # 影像只錄畫好框的 JPEG（/detections/image/compressed、/detections/bottom_image/compressed），
   # 相機的原始影像（含其他壓縮格式）、畫好框的原始影像都不錄，一次過門（約 30 秒）約 12 MB。
@@ -162,6 +225,8 @@ services:
     build:
       context: ../..
       dockerfile: docker/mission.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_MISSION_HASH:-}
     profiles: [mission]
     network_mode: host
     ipc: host
@@ -176,6 +241,52 @@ services:
       - ./logs/mission:/logs
     stop_grace_period: 10s        # SIGTERM 時 mission 會先送 MANUAL＋DISARM 再結束
     command: [mission, gate_pass, --no-checklist]
+
+  # 偵測驗證（./detect_sweep.sh）：在 Gazebo 裡把相機擺到每個道具前面的固定位姿拍照（sim_sweep，
+  # tools/sim_detect/capture.py），再用實機同一套 RF-DETR 算偵測率（detect_eval，evaluate.py）。
+  # 自己起一個 gz server（GZ_PARTITION=orca_sweep），不需要 simulator，跟正在跑的模擬也互不干擾。
+  # 結果在 logs/detect/<RUN>/（summary.md、summary.json、results.csv、samples/、frames/）。
+  sim_sweep:
+    image: orca-sim
+    profiles: [sweep]
+    network_mode: host
+    ipc: host
+    init: true
+    gpus: all
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - GZ_IP=127.0.0.1
+      - GZ_PARTITION=orca_sweep
+      - RUN=${RUN:-}
+      - PROPS=${PROPS:-}
+      - QUICK=${QUICK:-0}
+      - UNDERWATER_STRENGTH=${UNDERWATER_STRENGTH:-1.0}
+      - SWEEP_WORLD=${SWEEP_WORLD:-sauvc_final.sdf}
+      - GIT_REV=${GIT_REV:-}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../sim:/sim:ro
+      - ../../tools:/orca/tools:ro
+      - ./logs/detect:/out
+    # 要 source ROS 的環境：沒有的話 gz-transport 的 Python 綁定在這個 image 裡收不到服務的回應
+    command: [bash, -c, "source /opt/ros/humble/setup.bash && exec python3 -u /orca/tools/sim_detect/capture.py"]
+
+  detect_eval:
+    image: orca-perception
+    profiles: [sweep]
+    network_mode: host
+    ipc: host
+    init: true
+    gpus: all
+    environment:
+      - RUN=${RUN:-}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../tools:/orca/tools:ro
+      - ../../ml/rfdetr/weights:/model:ro
+      - ./logs/detect:/out
+      - torch-cache:/root/.cache
+    command: [python3, -u, /orca/tools/sim_detect/evaluate.py]
 
 volumes:
   torch-cache:

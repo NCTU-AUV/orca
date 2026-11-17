@@ -8,6 +8,8 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 
 飛控韌體、飛控參數、mavros 設定、adapter 程式都與實機相同；船的物理（推進器、浮力、阻力）由 Gazebo 模擬。設計與規格見 [plan.md](plan.md)，開發中遇到的特別事項見 [notes.md](notes.md)。
 
+場地照 SAUVC 2027 規則（Rulebook 2027.3.2）：資格賽與決賽主場地兩個世界、水下的畫面、碰撞與計分事件、偵測驗證，見 [world-2027.md](world-2027.md)。
+
 ## 快速開始
 
 指令都在 `deploy/sim/` 底下執行（`cd deploy/sim`）。第一次會 build image、下載偵測模型權重，要等比較久；主機需求見[需求](#需求)。
@@ -15,18 +17,21 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 **跑任務（行為樹）**：`./mission.sh` 一個指令從起模擬、等就緒、錄 rosbag 到跑完行為樹都包了，不用先跑 `./run.sh`。
 
 ```bash
-./mission.sh                                         # 過門：資格賽門（orca_qgate.sdf），開 Gazebo 視窗
+./mission.sh                                         # 過門：SAUVC 2027 資格賽（sauvc_qual.sdf），開 Gazebo 視窗
 GUI=0 ./mission.sh                                   # 不開 Gazebo 視窗
 ./mission.sh gate_pass -p depth=0.5 -p pass_s=6      # -p 覆寫樹的 vars（depth、surge、pass_s、min_score、center_tol、ready_timeout）
-WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門：橫桿在水下 0.6 m，要潛深一點
-WORLD=orca_pool.sdf ./mission.sh smoke_test          # 動作測試（下潛、轉向、前進），不需要門和相機
+WORLD=sauvc_final.sdf ./mission.sh <樹>              # 決賽主場地（導航門、flare、drum、Surfacing Square）
+WORLD=orca_pool.sdf ./mission.sh smoke_test          # 動作測試（下潛、轉向、前進），空池，不需要門和相機
+UNDERWATER=0 ./mission.sh                            # 關掉水下效果（乾淨明亮的畫面）；UNDERWATER_STRENGTH=0.5 調強度
 RECORD=0 ./mission.sh                                # 不錄 rosbag
 ./gate_pass.sh                                       # 舊版過門（狀態機 mission/gate_pass.py）
+./referee_check.sh                                   # 驗收：規則事件（碰撞、掉球、上浮…）都做得出來、讀得到
+./detect_sweep.sh                                    # 偵測驗證：每個道具在多遠偵測得到（水下效果開／關）
 ```
 
 - 每次執行都會重開 `simulator`，船回到水面、原點；其他服務沿用已經在跑的。要重跑就再執行一次。
-- 任何時候 Ctrl-C：上鎖、船浮上來，rosbag 也會收尾。
-- 紀錄：`logs/mission/<樹>_<時間>.csv`、`logs/bag/<樹>_<時間>/`（用 Foxglove 開裡面的 `.mcap`）。
+- 任何時候 Ctrl-C：上鎖、船浮上來。rosbag 從樹開始錄，樹結束、船浮上水面後自動停止並收尾（最多等 30 秒，再按一次 Ctrl-C 不等）。
+- 紀錄：`logs/mission/<樹>_<時間>.csv`、`logs/bag/<樹>_<時間>/`（mission 結束後不到 1 秒就收尾好，用 Foxglove 開裡面的 `.mcap`）、`logs/referee/<樹>_<時間>.jsonl`（裁判的事件與分數，樹跑完會印出來）。
 - 細節見[過門](#過門有門相機偵測)；樹的寫法與參數見 [`src/orca_mission`](../../src/orca_mission/README.md)。
 
 **只起模擬（跑水池測試程式、鍵盤操控）**：
@@ -34,7 +39,8 @@ RECORD=0 ./mission.sh                                # 不錄 rosbag
 ```bash
 ./run.sh                       # simulator + fc_adapter，前景執行，Ctrl-C 結束
 GUI=0 ./run.sh                 # 不開 Gazebo 視窗
-WORLD=orca_qgate.sdf ./run.sh  # 換 sim/worlds/ 底下的世界檔（預設 orca_pool.sdf）
+WORLD=sauvc_qual.sdf ./run.sh  # 換 sim/worlds/ 底下的世界檔（預設 orca_pool.sdf）；有相機的世界會連相機與偵測一起起
+./run.sh -d                    # 背景執行（其他參數都交給 docker compose up）
 ```
 
 起來約 5 秒後 EKF 對準，就可以另開終端機（同樣在 `deploy/sim/`）：
@@ -90,6 +96,8 @@ GUI=0 ./run.sh      # 不開 Gazebo 視窗
 |---|---|
 | `simulator` | Gazebo 泳池與 Orca、ArduSub SITL、mavproxy（MAVLink 轉送到 UDP 14550 給 QGC、UDP 14551 給 mavros） |
 | `fc_adapter` | mavros 與 `auv_adapter.py`，跟實機用同一個 image，只差 mavros 設定（`mavros_sitl.yaml`） |
+| `sim_referee` | 模擬裁判（[`sim/referee.py`](../../sim/referee.py)）：碰撞、過門、掉球、上浮 → `/sim/referee/events`、分數。只有模擬有，任務程式不要訂閱；空池（`orca_pool.sdf`）沒有計分規則，只記下潛、出發這類一般事件 |
+| `sim_dropper` | 放球指令 `/ball_dropper/release`（`std_msgs/Empty`，**暫定介面**）→ Gazebo 放開掛在船底的球（只有 `sauvc_final.sdf` 有球） |
 
 開機後約 5 秒 EKF 對準完成（`docker compose logs fc_adapter` 出現 `MAG0 initial yaw alignment complete`），之後才能解鎖。
 
@@ -127,18 +135,18 @@ docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py   # --g
 行為樹版（[`src/orca_mission`](../../src/orca_mission/README.md)，流程寫在 `trees/gate_pass.yaml`）：
 
 ```bash
-./mission.sh                                      # 資格賽門，開 Gazebo 視窗
+./mission.sh                                      # SAUVC 2027 資格賽，開 Gazebo 視窗
 GUI=0 ./mission.sh gate_pass -p pass_s=6          # 不開視窗；-p 覆寫樹的 vars
-WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
 WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉向、前進），不需要門
 ```
 
-一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator`（船回到水面、原點）→ 等 EKF 對準、飛控連線、偵測都就緒 → 開始錄 rosbag → 用 `mission` 服務跑行為樹（`--no-checklist`）→ 樹結束（含 Ctrl-C）後停止錄影。
+一個指令：沒有權重就先下載 → build image → 起 `fc_adapter`、`sim_dropper`、`sim_cameras`、`object_detector`（`vision` profile）→ 重開 `simulator` 與 `sim_referee`（船回到水面、原點，從 0 分開始）→ 等 EKF 對準、飛控連線、偵測都就緒 → 開始錄 rosbag → 用 `mission` 服務跑行為樹（`--no-checklist`）→ 樹結束（含 Ctrl-C）、上鎖、船浮上水面後停止錄影，印出裁判的事件。
 
 每次執行的紀錄同名，`<樹>_<時間>`：
 
 - `deploy/sim/logs/mission/<樹>_<時間>.csv`：行為樹的紀錄（20 Hz）。
-- `deploy/sim/logs/bag/<樹>_<時間>/`：rosbag（MCAP），用 [Foxglove](https://foxglove.dev) 直接開裡面的 `.mcap`。錄了 mavros、`/auv_control`、`/detections`、`/mission/status`（目前的節點與回饋）、`/rosout` 等全部 topic；**影像只錄畫好框的 JPEG**（`/detections/image/compressed`、`/detections/bottom_image/compressed`），相機的原始影像不錄。一次過門（約 30 秒）約 12 MB。
+- `deploy/sim/logs/bag/<樹>_<時間>/`：rosbag（MCAP），用 [Foxglove](https://foxglove.dev) 直接開裡面的 `.mcap`。錄了 mavros、`/auv_control`、`/detections`、`/mission/status`（目前的節點與回饋）、`/sim/referee/events`、`/rosout` 等全部 topic；**影像只錄畫好框的 JPEG**（`/detections/image/compressed`、`/detections/bottom_image/compressed`），相機的原始影像不錄。一次過門（約 30 秒）約 12 MB。
+- `deploy/sim/logs/referee/<樹>_<時間>.jsonl`：裁判的事件，一行一則 JSON（過門、碰撞、扣分、上浮…，見 [world-2027.md](world-2027.md#事件與計分)）。
 - 不想錄：`RECORD=0 ./mission.sh`。錄影設定在 `compose.yaml` 的 `recorder` 服務。
 - Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/orca_mission.json)（Foxglove 右上角的 layout 選單 → Import from file）。分頁「過門」有前視、底部畫好框的影像，行為樹節點／飛控模式／解鎖／有沒有看到門，門的偏離與框寬、深度、推力；分頁「飛控、log」有航向、`/mavros/state`、`/rosout`。`/mission/status` 是 JSON 字串，layout 裡帶的 User Script（`tools/foxglove/*.ts`）會把它和 `/detections` 拆成欄位。改了之後用 `python3 tools/foxglove/make_layout.py` 重新產生。
 
@@ -147,22 +155,20 @@ WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉�
 ```bash
 ./gate_pass.sh                              # 資格賽門
 GUI=0 ./gate_pass.sh --pass-s 6
-WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 ```
 
 流程一樣：起 `fc_adapter`、`sim_cameras`、`object_detector` → 重開 `simulator` → 等就緒 → 在 `fc_adapter` 容器裡執行 `mission/gate_pass.py`。模擬裡不列實機的檢查清單，不用按 Enter。跑完容器繼續跑，再執行一次就是重跑；全部關掉用 `docker compose --profile vision down`。
 
 | 世界 | 內容 |
 |---|---|
-| `orca_qgate.sdf`（預設） | 資格賽門（`models/q_gate`），從水面垂到池底，任何深度都能過；在船頭前方 6 m、偏右 1 m |
-| `orca_gate.sdf` | 導航門（`models/gate`），立在池底、高 1 m，橫桿在水下 1.6 − 1.0 = 0.6 m：船要潛到約 0.9 m 才不會從橫桿上方經過 |
+| `sauvc_qual.sdf`（`mission.sh` 的預設） | SAUVC 2027 資格賽：船從第 2 道的起點標記出發（船尾貼著牆），約 9.6 m 外是自水面吊掛 1 m 的資格賽門（偏右 0.2 m）。池底在門那裡約 1.62 m |
+| `sauvc_final.sdf` | SAUVC 2027 決賽主場地：船在起始區（水面），約 10.8 m 外是立在 2 m 池底的導航門（高 1.5 m），還有橘色 flare、三支 flare、綠墊與四個 drum、Surfacing Square，船底掛著一顆球 |
+| `orca_pool.sdf`（`run.sh` 的預設） | 舊的空池（25 × 16 m、深 1.6 m），沒有道具、沒有相機，給動作測試用 |
 
-- 兩個世界的船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）和一顆朝下的底部相機（640×480、10 Hz、水平視角 70°，影像上方 = 船頭；實機規格還沒定）。
-- 門的模型取自 [SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 依 2026 規則書做的版本。
-- `sim_cameras` 服務（[`sim/gz_camera_bridge.py`](../../sim/gz_camera_bridge.py)）把 Gazebo 影像轉成跟實機一樣的 `/camera/camera/color/image_raw`、`camera_info`，底部是 `/bottom_camera/image_raw`、`camera_info`；`object_detector` 跟實機是同一個 RF-DETR 節點，兩台相機輪流推論。不需要 `ros_gz`。
-- 2026-11-12 實測（`orca_qgate.sdf`、`GUI=0`）：相機約 11～14 fps；RF-DETR 把資格賽門認成 `gate`（分數 0.6～0.95，流程兩類都接受）；連跑兩次都走完，Gazebo 真值顯示通過門平面時離門中心 1.3 cm。
-- **畫面比真實水下乾淨**：沒有水的衰減、色偏、浮游物（Harmonic 的 ogre2 不支援 fog），偵測會比實機容易。適合驗證流程與方向，不代表實機的偵測距離。
-- 模擬裡 surge 0.2 約 0.8 m/s，盲走 8 秒會衝過門約 6 m，離池壁不到 2 m（現在 `gate_pass.py` 的預設是 5 秒）。
+- 有道具的世界，船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）、一顆朝下的底部相機（640×480、10 Hz、水平視角 70°，影像上方 = 船頭；實機規格還沒定），以及碰撞外框（只用來判斷碰撞，不算浮力）。
+- `sim_cameras` 服務（[`sim/gz_camera_bridge.py`](../../sim/gz_camera_bridge.py)）把 Gazebo 影像轉成跟實機一樣的 `/camera/camera/color/image_raw`、`camera_info`，底部是 `/bottom_camera/image_raw`、`camera_info`，轉之前先做水下成像的後處理（[`sim/underwater.py`](../../sim/underwater.py)）；`object_detector` 跟實機是同一個 RF-DETR 節點，兩台相機輪流推論。不需要 `ros_gz`。
+- 2026-11-12 實測（舊的 `orca_qgate.sdf`、`GUI=0`）：相機約 11～14 fps；RF-DETR 把資格賽門認成 `gate`（分數 0.6～0.95，流程兩類都接受）；連跑兩次都走完，Gazebo 真值顯示通過門平面時離門中心 1.3 cm。2027 世界的結果見 [world-2027.md](world-2027.md#驗收紀錄)。
+- 模擬裡 surge 0.2 約 0.8 m/s，盲走 8 秒會衝過門約 6 m（現在 `gate_pass.py` 的預設是 5 秒）。
 
 ### QGroundControl（選用）
 
@@ -173,11 +179,13 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 | 改了什麼 | 怎麼生效 |
 |---|---|
 | repo 的 `sim/` 底下的世界、模型、`start.sh`，或 `firmware/ardusub/sitl.parm` | `docker compose up -d --force-recreate simulator`（直接掛進容器，不用重 build） |
+| `sim/referee.py`、`sim/gz_camera_bridge.py`、`sim/underwater.py` | `docker compose restart sim_referee`（或 `sim_cameras`） |
+| 道具的尺寸、顏色、池子的貼圖（`tools/sim/gen_assets.py` 產生的那些） | 改 `gen_assets.py`，`python3 tools/sim/gen_assets.py` 重新產生 |
 | `tools/pool_tests/*.py` | 重新執行該程式 |
 | `src/` 底下的 `.py`、mavros 設定 | `docker compose restart fc_adapter`（`src/` 掛進容器，不用重 build） |
 | Dockerfile、`orca_msgs`、`package.xml`、`setup.py` | `docker compose build` 後再啟動 |
 
-`compose.yaml` 可用的環境變數：`GUI`（1 / 0）、`WORLD`（`sim/worlds/` 底下的世界檔，預設 `orca_pool.sdf`）、`DISPLAY`。
+`compose.yaml` 可用的環境變數：`GUI`（1 / 0）、`WORLD`（`sim/worlds/` 底下的世界檔，預設 `orca_pool.sdf`）、`UNDERWATER`（1 / 0，水下的樣子）、`UNDERWATER_STRENGTH`（相機影像水下效果的強度，預設 1.0）、`DISPLAY`。
 
 飛控每次開機都從 `sitl.parm` 重新載入參數（不保留上次改的值）。執行中用 QGC 或 mavros 改的參數，重開 sim 就會消失；要保留就寫進 `firmware/ardusub/sitl.parm`。
 
@@ -191,6 +199,8 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 | `deploy/sim/logs/fc_adapter/*.csv` | 測試程式、舊版過門的紀錄 |
 | `deploy/sim/logs/mission/*.csv` | 行為樹的紀錄 |
 | `deploy/sim/logs/bag/<樹>_<時間>/` | `./mission.sh` 每次執行錄的 rosbag（MCAP，影像只有畫好框的 JPEG），跟 CSV 同名 |
+| `deploy/sim/logs/referee/*.jsonl` | 裁判的事件與分數（`./mission.sh` 跑的跟 CSV 同名，其他用啟動時間）；`check_*.json` 是 `./referee_check.sh` 的結果 |
+| `deploy/sim/logs/detect/<RUN>/` | `./detect_sweep.sh` 的影像與結果（`summary.md`） |
 
 ## 已知問題與限制
 
@@ -227,11 +237,17 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 | `docker/sim.Dockerfile` | ROS 2 Humble + Gazebo Harmonic + ArduSub Sub-4.7.2 SITL + [ardupilot_gazebo](https://github.com/ArduPilot/ardupilot_gazebo) 外掛 + MAVProxy |
 | `sim/start.sh` | 依序啟動 gz sim、ardusub、mavproxy |
 | `firmware/ardusub/sitl.parm` | 飛控參數（取自實機）與 SITL 模擬硬體參數 |
-| `sim/worlds/orca_pool.sdf` | 泳池世界（25 × 16 m、深 1.6 m，水面 z = 0） |
-| `sim/worlds/orca_qgate.sdf`、`orca_gate.sdf` | 泳池 + 有相機的 Orca + 資格賽門／導航門 |
-| `sim/models/pool/`、`sim/models/orca/` | 泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin） |
-| `sim/models/orca_cam/`、`gate/`、`q_gate/` | Orca + 前視相機、導航門、資格賽門 |
-| `sim/gz_camera_bridge.py` | Gazebo 前視、底部相機 → ROS 影像（`sim_cameras` 服務） |
+| `sim/worlds/orca_pool.sdf` | 空池世界（25 × 16 m、深 1.6 m，水面 z = 0） |
+| `sim/worlds/sauvc_qual.sdf`、`sauvc_final.sdf` | SAUVC 2027 資格賽、決賽主場地（見 [world-2027.md](world-2027.md)） |
+| `sim/models/pool/`、`sim/models/orca/` | 舊泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin） |
+| `sim/models/orca_cam/` | Orca + 前視、底部相機（含 depth camera）+ 碰撞外框 |
+| `sim/models/pool_2027/`、`water/` | 50 × 25 m 泳池、水面與水體霧 |
+| `sim/models/` 其他 | 2027 的道具：`gate`、`q_gate`、`orange_flare`、`flare_red/yellow/blue`、`drum_red/blue/red_pinger`、`target_mat`、`surfacing_square`、`start_zone`、`start_marker`、`dropper_ball` |
+| `tools/sim/gen_assets.py` | 產生泳池、水、門、flare、drum 的貼圖、mesh、SDF |
+| `sim/gz_camera_bridge.py`、`sim/underwater.py` | Gazebo 前視、底部相機 → ROS 影像，含水下後處理（`sim_cameras` 服務） |
+| `sim/referee.py`、`sim/gz_dropper_bridge.py` | 模擬裁判（`sim_referee`）、放球指令（`sim_dropper`） |
+| `sim/tests/referee_check.py`、`deploy/sim/referee_check.sh` | 規則事件的驗收 |
+| `tools/sim_detect/`、`deploy/sim/detect_sweep.sh` | 偵測驗證（`sim_sweep`、`detect_eval`） |
 | `deploy/sim/mission.sh` | 一個指令跑行為樹（預設過門） |
 | `tools/foxglove/` | 看 rosbag 用的 Foxglove layout（`orca_mission.json`，由 `make_layout.py` 產生） |
 | `deploy/sim/gate_pass.sh` | 一個指令跑舊版過門 |
@@ -240,6 +256,6 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 
 ## 之後要加東西
 
-- 比賽道具：另寫一個世界檔 `<include>` 泳池與 `orca_cam`（要相機）或 `orca`，用 `WORLD=<檔名>` 載入。過門的兩個世界檔可以當範本。
-- 水下成像（衰減、色偏）：SAUVC-Simulation 的 `underwater_camera_node.py` 用深度圖做，可以搬到 `gz_camera_bridge.py`。
+- 新的世界：`<include>` `pool_2027`、`water`（夾在 `UNDERWATER:BEGIN`／`END` 之間）、道具與 `orca_cam`，Buoyancy 一定要 `<enable>orca::base_link</enable>`（原因見 `models/orca_cam` 的註解）。`sauvc_qual.sdf`、`sauvc_final.sdf` 可以當範本。
+- 新的計分規則：`sim/referee.py`，再到 `sim/tests/referee_check.py` 加一項驗收。
 - ROS 橋接、視覺、任務層：在 `deploy/sim/compose.yaml` 新增服務（ROS 2 Humble、host network、`ROS_LOCALHOST_ONLY=1`），不改 `simulator`、`fc_adapter` 的埠與 topic。

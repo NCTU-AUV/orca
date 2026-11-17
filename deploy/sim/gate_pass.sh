@@ -4,9 +4,9 @@
 #
 #   ./gate_pass.sh [gate_pass.py 的參數，例如 --pass-s 6]
 #   GUI=0 ./gate_pass.sh                                   # 不開 Gazebo 視窗
-#   WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9         # 導航門（立在池底，要潛深一點）
+#   UNDERWATER=0 ./gate_pass.sh                            # 關掉水下效果
 #
-# - 預設世界 orca_qgate.sdf：資格賽門，在船頭前方 6 m、偏右 1 m。
+# - 預設世界 sauvc_qual.sdf：SAUVC 2027 資格賽，門在船頭前方約 9.6 m、偏右 0.2 m，自水面吊掛 1 m。
 # - 每次執行都會重開 simulator，船從水面、原點開始；fc_adapter、sim_cameras、object_detector 沿用已經在跑的。
 # - 第一次會下載模型權重、build image，要等比較久。
 # - 不會等你按 Enter（模擬不需要實機的檢查清單）。任何時候 Ctrl-C：上鎖，船浮上來。
@@ -14,7 +14,9 @@
 # - 跟實機的 deploy/laptop 都綁 UDP 14551，不能同時跑。
 set -euo pipefail
 cd "$(dirname "$0")"
-export WORLD=${WORLD:-orca_qgate.sdf} GUI=${GUI:-1}
+# 映像的 build 指紋（orca.build-hash label）：跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
+source ../../docker/build-hash.sh
+export WORLD=${WORLD:-sauvc_qual.sdf} GUI=${GUI:-1}
 
 if [[ ! -f ../../ml/rfdetr/weights/checkpoint_best_total.pth ]]; then
   ../../ml/rfdetr/fetch_weights.sh
@@ -23,8 +25,9 @@ if [[ $GUI == 1 ]]; then
   xhost +SI:localuser:root > /dev/null
 fi
 
-docker compose --profile vision up -d fc_adapter sim_cameras object_detector
-docker compose up -d --force-recreate simulator
+docker compose build simulator     # Dockerfile 改過才會真的重 build，平常幾秒
+docker compose --profile vision up -d fc_adapter sim_dropper sim_cameras object_detector
+docker compose up -d --force-recreate simulator sim_referee
 
 in_bridge() { docker compose exec -T fc_adapter /entrypoint.sh "$@" 2>/dev/null; }
 

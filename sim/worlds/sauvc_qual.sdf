@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<!--
+  SAUVC 2027 資格賽（Rulebook 2027.3.2）。./mission.sh 預設用這個世界。
+
+  規則：AUV 從池壁上 1 m 寬的起點標記出發，出發時要碰到牆；約 10 m 外是吊在水面的資格賽門
+  （寬 150 cm、往下約 100 cm）。完整穿過門得 1 分，迴轉再穿回來共 2 分。
+  浮出水面、碰到池底、池壁或門的任何一邊（兩柱、浮桿），該次失敗。
+  這些事件由 sim/referee.py 判斷，發到 ROS /sim/referee/events。
+
+  座標：
+    世界座標的原點是船的出發位置（水面 z = 0，往下為負），船頭朝 +x。跟其他世界檔一樣，
+    「船從水面、原點出發」。
+    場地座標 arena：原點在泳池角落（資格賽起點那面牆 x = 0），x = 0 ~ 50 沿泳池長邊，
+    y = 0 ~ 25 沿短邊，就是 docs/sim/reference/arena-2027.png 的 Top View（左下角為原點）。
+    道具的 pose 都寫 relative_to="arena"，直接對照官方圖。
+
+  要換出發位置：改 <frame name="arena"> 的 pose。船在場地座標 (xs, ys)、船頭朝 arena +x 時，
+  pose = (-xs, -ys, 0)。現在 xs = 0.37（船尾的推進器剛好貼著牆，一開始就有「碰牆」）、
+  ys = 12.2（第 2 道，比標記中心偏左 0.2 m，讓對準那一步有事可做）。
+  sim/referee.py 會自己挑離出發位置最近的起點標記與資格賽門當這次的目標。
+
+  水深：池底在牆邊 1.28 m，往主場地斜下去，門所在的 x = 10 m 處約 1.62 m（見 model://pool_2027）。
+-->
+<sdf version="1.9" xmlns:orca="https://github.com/NCTU-AUV/orca">
+  <world name="sauvc_qual">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <!-- 相機的算圖。ogre2；沒開 GUI 時 start.sh 會加 headless rendering -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <!-- 更新模型裡的 IMU 感測器（ArduPilotPlugin 讀它） -->
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <!-- 碰撞事件：船的 contact sensor（model://orca_cam 的 bumper_link）→ gz topic /orca/contacts -->
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <!-- 對物體施力（測試、排錯時推船用；sim/tests/referee_check.py 靠它）。平常沒人發指令就沒有作用：
+         gz topic -t /world/sauvc_qual/wrench/persistent -m gz.msgs.EntityWrench \
+           -p 'entity: {name: "orca::base_link", type: LINK}, wrench: {force: {x: 20}}'
+         gz topic -t /world/sauvc_qual/wrench/clear -m gz.msgs.Entity -p 'name: "orca::base_link", type: LINK' -->
+    <plugin filename="gz-sim-apply-link-wrench-system" name="gz::sim::systems::ApplyLinkWrench"/>
+
+    <!-- 水的浮力：z < 0 為 1000 kg/m^3，z > 0 為空氣。
+         只對 <enable> 列出的東西算浮力：船的 base_link（船的碰撞外框 bumper_link 不能算，
+         見 model://orca_cam）與會沉的球。其他道具的質量已經是扣掉浮力後的等效值。 -->
+    <plugin filename="gz-sim-buoyancy-system" name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1000</default_density>
+        <density_change>
+          <above_depth>0</above_depth>
+          <density>1</density>
+        </density_change>
+      </graded_buoyancy>
+      <enable>orca::base_link</enable>
+    </plugin>
+
+    <scene>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.8 0.88 0.92 1</background>
+    </scene>
+
+    <light type="directional" name="sun">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.6 0.6 0.6 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <direction>-0.15 0.08 -0.98</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <!-- 補光：水裡的光是散射過的，池壁、柱子這些垂直面不會像只有一顆太陽時那麼暗。
+         四個斜向的方向光，不投影 -->
+    <light type="directional" name="fill_xp">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>1 0.2 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="fill_xn">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>-1 -0.2 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="fill_yp">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>-0.2 1 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="fill_yn">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>0.2 -1 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+
+    <!-- sim/referee.py 的設定（SDF 不認得的自訂元素，Gazebo 會略過） -->
+    <orca:referee mode="qualification"/>
+
+    <frame name="arena">
+      <pose>-0.37 -12.2 0 0 0 0</pose>
+    </frame>
+
+    <include>
+      <uri>model://pool_2027</uri>
+      <pose relative_to="arena">0 0 0 0 0 0</pose>
+    </include>
+
+    <!-- 水下的樣子：水面，以及 Gazebo 視窗裡的水體霧（particle，見 model://water）。
+         UNDERWATER=0 時 sim/start.sh 會把 UNDERWATER:BEGIN 到 UNDERWATER:END 之間整段拿掉，
+         回到沒有水的乾淨畫面；相機影像的水下後處理（sim/underwater.py）也由同一個 UNDERWATER 開關。
+         BEGIN、END 這兩行註解是標記，不要改。 -->
+    <!-- UNDERWATER:BEGIN -->
+    <plugin filename="gz-sim-particle-emitter-system" name="gz::sim::systems::ParticleEmitter"/>
+    <include>
+      <uri>model://water</uri>
+      <pose relative_to="arena">0 0 0 0 0 0</pose>
+    </include>
+    <!-- UNDERWATER:END -->
+
+    <!-- 資格賽三條道（arena-2027.png）：池壁上 1 m 寬的起點標記，10 m 外是資格賽門。
+         門的 yaw -90°：兩柱沿 arena y，船沿 arena x 穿過。 -->
+    <include><uri>model://start_marker</uri><name>start_marker_1</name><pose relative_to="arena">0 2.6 0 0 0 0</pose></include>
+    <include><uri>model://start_marker</uri><name>start_marker_2</name><pose relative_to="arena">0 12.0 0 0 0 0</pose></include>
+    <include><uri>model://start_marker</uri><name>start_marker_3</name><pose relative_to="arena">0 22.6 0 0 0 0</pose></include>
+    <include><uri>model://q_gate</uri><name>q_gate_1</name><pose relative_to="arena">10 2.6 0 0 0 -1.5707963268</pose></include>
+    <include><uri>model://q_gate</uri><name>q_gate_2</name><pose relative_to="arena">10 12.0 0 0 0 -1.5707963268</pose></include>
+    <include><uri>model://q_gate</uri><name>q_gate_3</name><pose relative_to="arena">10 22.6 0 0 0 -1.5707963268</pose></include>
+
+    <!-- Orca + 相機 + 碰撞外框（model://orca_cam：model://orca 原封不動併入） -->
+    <include>
+      <uri>model://orca_cam</uri>
+      <pose>0 0 -0.2 0 0 0</pose>
+    </include>
+
+  </world>
+</sdf>

@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!--
+  標靶區的綠墊，SAUVC 2027 Rulebook 2027.3.2：8 x 2 m，鋪在池底，四個 drum 放在上面。
+  顏色照隊上的實拍（偏黃的亮綠色）。只有外觀、沒有 collision：墊子貼著池底，碰到它就是碰到池底。
+  模型原點在墊子中心、池底；長邊沿模型 x。
+-->
+<sdf version="1.9">
+  <model name="target_mat">
+    <static>true</static>
+    <link name="mat">
+      <visual name="visual">
+        <pose>0 0 0.003 0 0 0</pose>
+        <geometry><box><size>8 2 0.004</size></box></geometry>
+        <material>
+          <ambient>0.40 0.75 0.15 1</ambient>
+          <diffuse>0.40 0.75 0.15 1</diffuse>
+          <specular>0.02 0.02 0.02 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

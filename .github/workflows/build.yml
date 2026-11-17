@@ -17,7 +17,7 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py sim/gz_camera_bridge.py
+        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py sim/*.py sim/tests/*.py tools/sim/*.py tools/sim_detect/*.py
       - name: mission tests
         run: python3 mission/test_gate_pass.py
       # 行為樹：執行器、TaskRunner、YAML 載入、過門流程（平面模型），以及 trees/*.md 跟 YAML 一致

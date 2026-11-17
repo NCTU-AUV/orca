@@ -1,0 +1,213 @@
+<?xml version="1.0"?>
+<!--
+  SAUVC 2027 決賽主場地（Rulebook 2027.3.2）：起始區、導航門、橘色 flare、紅／黃／藍 flare、
+  綠墊與四個 drum、Surfacing Square。位置照 docs/sim/reference/arena-2027.png。
+
+  計分與 abort（sim/referee.py 判斷，發到 ROS /sim/referee/events）：
+    穿過導航門 15 分；碰到門 -2；碰到池底或池壁 -5，累計超過 10 秒或 5 次 abort；
+    碰到橘色 flare 立即 abort；紅／黃／藍 flare 頂端的球掉下來各 20 分，照指定順序三支都掉再加 60；
+    球掉進 drum 並留在裡面：藍 30、裝 pinger 的紅 50、其他紅 10（只算第一顆）；
+    上浮 5 分，過門之後在 Surfacing Square 內上浮且沒碰到框再加 20。
+
+  座標：
+    世界座標的原點是船的出發位置（起始區中心，水面 z = 0），船頭朝 +x。
+    場地座標 arena：原點在泳池角落，x = 0 ~ 50 沿泳池長邊（x = 0 是資格賽起點那面牆），
+    y = 0 ~ 25 沿短邊，就是 arena-2027.png 的 Top View（左下角為原點）。決賽的跑道沿短邊：
+    船從 y = 1.2 的起始區往 +y 走，所以船頭的世界 +x = arena +y。
+    道具的 pose 都寫 relative_to="arena"，直接對照官方圖。官方圖不是按比例畫的，
+    位置用圖上標的數字（10 m、28 m、~4 m、~8 m、~12 m、8 x 2 m）推回去：主場地 x = 22 ~ 50。
+
+  比賽會隨機的東西都在下面標了「隨機」的地方，改那幾行就好：
+    導航門的位置（沿 y = 12 的線）、橘色 flare 的位置（y = 4 ~ 8 的帶狀區）、
+    三支 flare 的位置（y = 14.4 ~ 19.3 的帶狀區）、四個 drum 哪個是藍的／哪個裝 pinger、
+    flare 的指定順序（<orca:referee flare_order>）。
+
+  水深：主場地是 2.0 m 平底；x < 19.3 是斜坡（見 model://pool_2027），Surfacing Square 下方約 1.66 m。
+-->
+<sdf version="1.9" xmlns:orca="https://github.com/NCTU-AUV/orca">
+  <world name="sauvc_final">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <!-- 相機的算圖。ogre2；沒開 GUI 時 start.sh 會加 headless rendering -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <!-- 更新模型裡的 IMU 感測器（ArduPilotPlugin 讀它） -->
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <!-- 碰撞事件：船的 contact sensor（model://orca_cam 的 bumper_link）→ gz topic /orca/contacts -->
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <!-- 對物體施力（測試、排錯時推船用；sim/tests/referee_check.py 靠它）。平常沒人發指令就沒有作用：
+         gz topic -t /world/sauvc_final/wrench/persistent -m gz.msgs.EntityWrench \
+           -p 'entity: {name: "orca::base_link", type: LINK}, wrench: {force: {x: 20}}'
+         gz topic -t /world/sauvc_final/wrench/clear -m gz.msgs.Entity -p 'name: "orca::base_link", type: LINK' -->
+    <plugin filename="gz-sim-apply-link-wrench-system" name="gz::sim::systems::ApplyLinkWrench"/>
+
+    <!-- 水的浮力：z < 0 為 1000 kg/m^3，z > 0 為空氣。
+         只對 <enable> 列出的東西算浮力：船的 base_link（船的碰撞外框 bumper_link 不能算，
+         見 model://orca_cam）與會沉的球。其他道具的質量已經是扣掉浮力後的等效值。 -->
+    <plugin filename="gz-sim-buoyancy-system" name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1000</default_density>
+        <density_change>
+          <above_depth>0</above_depth>
+          <density>1</density>
+        </density_change>
+      </graded_buoyancy>
+      <enable>orca::base_link</enable>
+      <enable>dropper_ball</enable>
+      <enable>flare_red::ball</enable>
+      <enable>flare_yellow::ball</enable>
+      <enable>flare_blue::ball</enable>
+    </plugin>
+
+    <scene>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.8 0.88 0.92 1</background>
+    </scene>
+
+    <light type="directional" name="sun">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.6 0.6 0.6 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <direction>-0.15 0.08 -0.98</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <!-- 補光：水裡的光是散射過的，池壁、柱子這些垂直面不會像只有一顆太陽時那麼暗。
+         四個斜向的方向光，不投影 -->
+    <light type="directional" name="fill_xp">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>1 0.2 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="fill_xn">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>-1 -0.2 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="fill_yp">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>-0.2 1 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="fill_yn">
+      <diffuse>0.16 0.16 0.16 1</diffuse><specular>0 0 0 1</specular>
+      <direction>0.2 -1 -0.45</direction><cast_shadows>false</cast_shadows>
+    </light>
+
+    <!-- sim/referee.py 的設定（SDF 不認得的自訂元素，Gazebo 會略過）。
+         隨機：flare_order 是賽前告知的撞擊順序 -->
+    <orca:referee mode="final" flare_order="red blue yellow"/>
+
+    <!-- 船在場地座標 (35.7, 1.2)、船頭朝 arena +y。要換出發位置 (xs, ys)：pose = (-ys, xs, 0, 0, 0, -90°) -->
+    <frame name="arena">
+      <pose>-1.2 35.7 0 0 0 -1.5707963268</pose>
+    </frame>
+
+    <include>
+      <uri>model://pool_2027</uri>
+      <pose relative_to="arena">0 0 0 0 0 0</pose>
+    </include>
+
+    <!-- 水下的樣子：水面，以及 Gazebo 視窗裡的水體霧（particle，見 model://water）。
+         UNDERWATER=0 時 sim/start.sh 會把 UNDERWATER:BEGIN 到 UNDERWATER:END 之間整段拿掉，
+         回到沒有水的乾淨畫面；相機影像的水下後處理（sim/underwater.py）也由同一個 UNDERWATER 開關。
+         BEGIN、END 這兩行註解是標記，不要改。 -->
+    <!-- UNDERWATER:BEGIN -->
+    <plugin filename="gz-sim-particle-emitter-system" name="gz::sim::systems::ParticleEmitter"/>
+    <include>
+      <uri>model://water</uri>
+      <pose relative_to="arena">0 0 0 0 0 0</pose>
+    </include>
+    <!-- UNDERWATER:END -->
+
+    <!-- 起始區：水面上 140 x 140 cm。船要自己完全下潛才能離開 -->
+    <include>
+      <uri>model://start_zone</uri>
+      <pose relative_to="arena">35.7 1.2 0 0 0 0</pose>
+    </include>
+
+    <!-- 導航門：立在池底，距起始區那面牆約 12 m。隨機：可沿 y = 12 的線左右移動（改 x）。
+         yaw 0：紅柱（port）在 arena -x，也就是船往 +y 走時的左手邊 -->
+    <include>
+      <uri>model://gate</uri>
+      <pose relative_to="arena">31.4 12.0 -2.0 0 0 0</pose>
+    </include>
+
+    <!-- 橘色 flare：碰到就 abort。隨機：在門之前、y = 4 ~ 8 的帶狀區內任意位置 -->
+    <include>
+      <uri>model://orange_flare</uri>
+      <pose relative_to="arena">32.6 6.3 -2.0 0 0 0</pose>
+    </include>
+
+    <!-- 紅／黃／藍 flare：頂端各一顆高爾夫球。隨機：門與標靶區之間（y = 14.4 ~ 19.3）任意位置。
+         z 比池底高 1 mm，讓底盤是「放上去」而不是一開始就陷在池底裡 -->
+    <include>
+      <uri>model://flare_yellow</uri>
+      <pose relative_to="arena">28.6 17.9 -1.999 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://flare_red</uri>
+      <pose relative_to="arena">39.6 18.2 -1.999 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://flare_blue</uri>
+      <pose relative_to="arena">45.6 16.2 -1.999 0 0 0</pose>
+    </include>
+
+    <!-- 標靶區：8 x 2 m 綠墊，長邊沿泳池長邊；四個 drum 在墊子上排成一列（間隔 2 m）。
+         隨機：哪個位置放哪一種。四個位置固定，換 uri 就好：
+         drum_blue（藍）、drum_red_pinger（裝 pinger 的紅）、drum_red（其他紅，兩個） -->
+    <include>
+      <uri>model://target_mat</uri>
+      <pose relative_to="arena">31.1 22.9 -2.0 0 0 0</pose>
+    </include>
+    <include><uri>model://drum_blue</uri><name>drum_1</name><pose relative_to="arena">28.1 22.9 -1.995 0 0 0</pose></include>
+    <include><uri>model://drum_red</uri><name>drum_2</name><pose relative_to="arena">30.1 22.9 -1.995 0 0 0</pose></include>
+    <include><uri>model://drum_red_pinger</uri><name>drum_3</name><pose relative_to="arena">32.1 22.9 -1.995 0 0 0</pose></include>
+    <include><uri>model://drum_red</uri><name>drum_4</name><pose relative_to="arena">34.1 22.9 -1.995 0 0 0</pose></include>
+
+    <!-- Surfacing Square（2027 新增）：200 x 200 cm 浮框，貼著資格賽區那一側的邊界（x = 10） -->
+    <include>
+      <uri>model://surfacing_square</uri>
+      <pose relative_to="arena">11.0 8.5 0 0 0 0</pose>
+    </include>
+
+    <!-- 資格賽三條道（arena-2027.png）：池壁上 1 m 寬的起點標記，10 m 外是資格賽門。
+         門的 yaw -90°：兩柱沿 arena y，船沿 arena x 穿過。 -->
+    <include><uri>model://start_marker</uri><name>start_marker_1</name><pose relative_to="arena">0 2.6 0 0 0 0</pose></include>
+    <include><uri>model://start_marker</uri><name>start_marker_2</name><pose relative_to="arena">0 12.0 0 0 0 0</pose></include>
+    <include><uri>model://start_marker</uri><name>start_marker_3</name><pose relative_to="arena">0 22.6 0 0 0 0</pose></include>
+    <include><uri>model://q_gate</uri><name>q_gate_1</name><pose relative_to="arena">10 2.6 0 0 0 -1.5707963268</pose></include>
+    <include><uri>model://q_gate</uri><name>q_gate_2</name><pose relative_to="arena">10 12.0 0 0 0 -1.5707963268</pose></include>
+    <include><uri>model://q_gate</uri><name>q_gate_3</name><pose relative_to="arena">10 22.6 0 0 0 -1.5707963268</pose></include>
+
+    <!-- 放球機構的球：擺在船底中線（機架底面下 5 mm）。要寫在船的 <include> 前面，
+         DetachableJoint 啟動時才找得到它 -->
+    <include>
+      <uri>model://dropper_ball</uri>
+      <pose>0 0 -0.365 0 0 0</pose>
+    </include>
+
+    <!-- Orca + 相機 + 碰撞外框（model://orca_cam：model://orca 原封不動併入）。
+         DetachableJoint：把球固定在 base_link 上（電磁鐵吸住），gz topic /orca/ball_dropper/release
+         收到 gz.msgs.Empty 就放開。ROS 那一側的指令由 sim/gz_dropper_bridge.py 轉過來 -->
+    <include>
+      <uri>model://orca_cam</uri>
+      <pose>0 0 -0.2 0 0 0</pose>
+      <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
+        <parent_link>base_link</parent_link>
+        <child_model>dropper_ball</child_model>
+        <child_link>ball</child_link>
+        <detach_topic>/orca/ball_dropper/release</detach_topic>
+      </plugin>
+    </include>
+
+  </world>
+</sdf>

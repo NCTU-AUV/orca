@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<!--
+  橘色 flare，SAUVC 2027 Rulebook 2027.3.2：高約 150 cm、直徑約 15 cm。
+  **它是障礙物，不是目標：AUV 任何部位碰到就立即 abort**（sim/referee.py）。
+
+  構造照 docs/sim/reference/orange-flare-2022.jpg：一根充氣的橘色浮管（潛水用的浮力棒），
+  底部綁在一疊配重盤上壓在池底，靠浮力立起來；被撞會歪、放開會自己回正。
+  跟紅／黃／藍那種插在底盤上的硬桿（flare_red 等）是完全不同的東西。
+
+  做法：
+    base  配重盤，用 fixed joint 釘在世界上（實際上很重，船推不動）。
+    tube  浮管，用 universal joint 接在 base 頂端，兩個軸各有彈簧與阻尼。
+          浮力把管子拉直的效果用彈簧代替（世界檔的 Buoyancy 沒有把它列進 <enable>），
+          不用算浮力、行為好調：在管子中段推 12 N 約歪 27°，放開約 1.2 秒回正。
+  實際的浮管會隨水流輕微擺動，模擬裡沒有水流，靜止時是直立不動的。
+  模型原點在池底（配重盤底面中心）。
+-->
+<sdf version="1.9">
+  <model name="orange_flare">
+
+    <link name="base">
+      <inertial>
+        <pose>0 0 0.03 0 0 0</pose>
+        <mass>10</mass>
+        <inertia><ixx>0.035</ixx><iyy>0.035</iyy><izz>0.06</izz></inertia>
+      </inertial>
+      <collision name="collision">
+        <pose>0 0 0.03 0 0 0</pose>
+        <geometry><cylinder><radius>0.11</radius><length>0.06</length></cylinder></geometry>
+      </collision>
+      <!-- 兩片疊在一起、稍微錯開的槓片 -->
+      <visual name="plate_lower">
+        <pose>0 0 0.015 0 0 0</pose>
+        <geometry><cylinder><radius>0.11</radius><length>0.03</length></cylinder></geometry>
+        <material><ambient>0.08 0.08 0.08 1</ambient><diffuse>0.08 0.08 0.08 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <visual name="plate_upper">
+        <pose>0.03 0.02 0.045 0 0 0</pose>
+        <geometry><cylinder><radius>0.10</radius><length>0.03</length></cylinder></geometry>
+        <material><ambient>0.10 0.10 0.10 1</ambient><diffuse>0.10 0.10 0.10 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+    </link>
+
+    <joint name="anchor" type="fixed">
+      <parent>world</parent>
+      <child>base</child>
+    </joint>
+
+    <!-- 浮管：z = 0.10 ~ 1.50 m -->
+    <link name="tube">
+      <pose>0 0 0.80 0 0 0</pose>
+      <inertial>
+        <mass>0.5</mass>
+        <inertia><ixx>0.082</ixx><iyy>0.082</iyy><izz>0.0014</izz></inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><cylinder><radius>0.075</radius><length>1.40</length></cylinder></geometry>
+      </collision>
+      <visual name="tube">
+        <pose>0 0 0.04 0 0 0</pose>
+        <geometry><cylinder><radius>0.075</radius><length>1.32</length></cylinder></geometry>
+        <material><ambient>1.0 0.35 0.05 1</ambient><diffuse>1.0 0.35 0.05 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+      </visual>
+      <!-- 底部的黑色束口與綁在配重盤上的帶子 -->
+      <visual name="cuff">
+        <pose>0 0 -0.66 0 0 0</pose>
+        <geometry><cylinder><radius>0.06</radius><length>0.08</length></cylinder></geometry>
+        <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.05 0.05 0.05 1</diffuse><specular>0.02 0.02 0.02 1</specular></material>
+      </visual>
+      <visual name="strap">
+        <pose>0 0 -0.72 0 0 0</pose>
+        <geometry><cylinder><radius>0.012</radius><length>0.06</length></cylinder></geometry>
+        <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.05 0.05 0.05 1</diffuse><specular>0.02 0.02 0.02 1</specular></material>
+      </visual>
+    </link>
+
+    <joint name="tether" type="universal">
+      <pose relative_to="base">0 0 0.06 0 0 0</pose>
+      <parent>base</parent>
+      <child>tube</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <dynamics><damping>3</damping><spring_stiffness>20</spring_stiffness><spring_reference>0</spring_reference></dynamics>
+      </axis>
+      <axis2>
+        <xyz>0 1 0</xyz>
+        <dynamics><damping>3</damping><spring_stiffness>20</spring_stiffness><spring_reference>0</spring_reference></dynamics>
+      </axis2>
+    </joint>
+  </model>
+</sdf>

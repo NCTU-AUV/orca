@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+  放球機構帶的球，SAUVC 2027 Rulebook 2027.3.2：直徑 3.5 ~ 4.5 cm、空氣中 200 g 以內（隊伍自備）。
+  這裡是直徑 4 cm、200 g 的鋼球（給電磁鐵吸）：排水約 34 g，放開就沉。
+
+  球本身沒有外掛。世界檔把它擺在船底，並在 <include model://orca_cam> 裡加一個 DetachableJoint
+  （parent = orca 的 base_link、child = 這顆球），收到脫離指令球就掉下去；見 sauvc_final.sdf。
+  世界檔的 Buoyancy 要 <enable>dropper_ball</enable>。
+  規則：球掉進 drum 而且留在裡面，藍 30 分、裝 pinger 的紅 50 分、其他紅 10 分，只算第一顆
+  （sim/referee.py）。
+-->
+<sdf version="1.9">
+  <model name="dropper_ball">
+    <link name="ball">
+      <inertial>
+        <mass>0.2</mass>
+        <inertia><ixx>3.2e-5</ixx><iyy>3.2e-5</iyy><izz>3.2e-5</izz></inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><sphere><radius>0.02</radius></sphere></geometry>
+      </collision>
+      <!-- 球還吸在船上時，它是船最低的一點：碰到池底的會是它。sim/referee.py 把球還沒放開時的
+           接觸算成船的接觸（規則上球是 AUV 的一部分） -->
+      <sensor name="contact" type="contact">
+        <always_on>1</always_on>
+        <contact>
+          <collision>collision</collision>
+          <topic>/orca/ball_contacts</topic>
+        </contact>
+      </sensor>
+      <visual name="visual">
+        <geometry><sphere><radius>0.02</radius></sphere></geometry>
+        <material>
+          <ambient>0.75 0.76 0.78 1</ambient>
+          <diffuse>0.75 0.76 0.78 1</diffuse>
+          <specular>0.6 0.6 0.6 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
