@@ -182,7 +182,7 @@ def water_surface_texture(path, size=512):
     save(path, (np.clip(rgb[..., ::-1], 0, 1) * 255).astype(np.uint8))
 
 
-def haze_texture(path, size=64, peak=0.10):
+def haze_texture(path, size=64, peak=0.16):
     """水體霧的粒子貼圖：白色、邊緣漸淡的圓，alpha 很低（一顆只擋一點點，疊多了才看得出來）。"""
     y, x = np.mgrid[0:size, 0:size]
     r = np.hypot(x - (size - 1) / 2, y - (size - 1) / 2) / ((size - 1) / 2)
@@ -410,14 +410,14 @@ def gen_water():
     <link name="haze">
       <!-- size 的三個數依序對應模型的 y、z、x（實測，跟直覺不同）：這裡是 x 48、y 23、z 0.6 m 的薄層，
            粒子直徑 2 m，所以霧大約佔滿 z = -2.3 ~ -0.3，不會冒出水面或池壁。
-           同時存在的粒子數 = rate x lifetime = 480。 -->
+           同時存在的粒子數 = rate x lifetime = 720。 -->
       <particle_emitter name="haze" type="box">
         <pose>{POOL_X / 2} {POOL_Y / 2} -1.3 0 0 0</pose>
         <emitting>true</emitting>
         <size>{POOL_Y - 2} 0.6 {POOL_X - 2}</size>
         <particle_size>2 2 2</particle_size>
         <lifetime>30</lifetime>
-        <rate>16</rate>
+        <rate>24</rate>
         <min_velocity>0.005</min_velocity>
         <max_velocity>0.02</max_velocity>
         <scale_rate>0</scale_rate>
