@@ -178,7 +178,7 @@ docker compose exec sim_referee bash -ic 'ros2 topic echo /sim/referee/events'
 | 3 | 行為要求的每個事件都做得出來、讀得到 | 通過。`./referee_check.sh`：決賽 32／32、資格賽 13／13 項 |
 | 4 | 水下效果開與關的影像明顯不同，`camera_info` 完全相同 | 通過。[`camera_ab_check.py`](../../sim/tests/camera_ab_check.py)（資格賽世界）：前視、底部的 `camera_info`、`frame_id`、影像格式完全相同；開與關平均每個像素差 46.5／40.8（8-bit），同一條件前後幀的差是 0 |
 | 5 | 偵測驗證跑得完並產出結果檔 | 通過。`./detect_sweep.sh`：1528 張，拍攝約 4 分鐘、推論約 1 分鐘，結果見[上面](#結果2026-11-18sweep_20261118) |
-| 6 | `./mission.sh smoke_test` 等既有流程不壞 | 通過。`WORLD=orca_pool.sdf ./mission.sh smoke_test`：行為樹 SUCCESS。`./mission.sh`（gate_pass，資格賽世界，水下效果開）：行為樹 SUCCESS，9.6 m 外就認得到資格賽門；裁判記到「出發碰牆 → 下潛 → 去程穿過資格賽門（離中心 0.8 cm、沒碰到）→ 上浮」，1 分 |
+| 6 | `./mission.sh smoke_test` 等既有流程不壞 | 通過。`WORLD=orca_pool.sdf ./mission.sh smoke_test`：行為樹 SUCCESS。`./mission.sh`（gate_pass，資格賽世界，水下效果開）：行為樹 SUCCESS，9.6 m 外就認得到資格賽門；裁判記到「出發碰牆 → 下潛 → 去程穿過資格賽門（離中心 0.8 cm、沒碰到）→ 上浮」，1 分。合併 `feat/gate-blind-after-lost`（盲走到完全看不到門、`gate_pass_yaw`）後重跑：`gate_pass`、`gate_pass_yaw`、`smoke_test` 都 SUCCESS，兩棵過門樹離門中心都不到 1 cm、沒碰到 |
 
 gate_pass 的 `depth` 是飛控歸零後的深度（船浮著時為 0），船的原點實際在水面下 `depth + 0.21` m：預設 0.3 時船在 0.51 m，正好在資格賽門開口（0～1 m）的中間。決賽的導航門橫桿在水面下約 0.54 m，船要在 `depth` 約 0.6～1.6 之間才從門框裡過（建議 1.0）；用預設 0.3 會從橫桿上方過去，裁判會發 `gate_missed`。
 
