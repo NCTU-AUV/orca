@@ -1,0 +1,73 @@
+{
+  "world": "sauvc27_qualification",
+  "frame": "x 沿 50 m 長邊（0 = 淺端池壁），y 沿 25 m 短邊，z 向上（0 = 水面）",
+  "props": {
+    "qual_start_1": {
+      "model": "sauvc27_qual_start_line",
+      "kind": "qualification_start",
+      "pose": [
+        0.0,
+        2.5,
+        0.0,
+        0.0
+      ]
+    },
+    "qual_gate_1": {
+      "model": "sauvc27_qual_gate",
+      "kind": "qualification_gate",
+      "pose": [
+        10.0,
+        2.5,
+        0.0,
+        1.5708
+      ]
+    },
+    "qual_start_2": {
+      "model": "sauvc27_qual_start_line",
+      "kind": "qualification_start",
+      "pose": [
+        0.0,
+        12.5,
+        0.0,
+        0.0
+      ]
+    },
+    "qual_gate_2": {
+      "model": "sauvc27_qual_gate",
+      "kind": "qualification_gate",
+      "pose": [
+        10.0,
+        12.5,
+        0.0,
+        1.5708
+      ]
+    },
+    "qual_start_3": {
+      "model": "sauvc27_qual_start_line",
+      "kind": "qualification_start",
+      "pose": [
+        0.0,
+        22.5,
+        0.0,
+        0.0
+      ]
+    },
+    "qual_gate_3": {
+      "model": "sauvc27_qual_gate",
+      "kind": "qualification_gate",
+      "pose": [
+        10.0,
+        22.5,
+        0.0,
+        1.5708
+      ]
+    }
+  },
+  "vehicle_start": [
+    0.35,
+    12.5,
+    -0.2,
+    0.0
+  ],
+  "qualification_lane": 2
+}

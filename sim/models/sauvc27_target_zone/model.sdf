@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!--
+Target zone（規則書 §9.2）：鋪在池底的綠色墊子，8 m × 2 m（長邊沿模型 x）。原點在池底、墊子中心。
+
+  由 sim/arena/sauvc2027.py 產生，不要手改。
+-->
+<sdf version="1.9">
+  <model name="sauvc27_target_zone">
+    <static>true</static>
+    <link name="mat"><visual name="mat"><pose>0 0 0.005 0 0 0</pose><geometry><box><size>8 2 0.01</size></box></geometry><material><ambient>0.06 0.2 0.08 1</ambient><diffuse>0.15 0.5 0.2 1</diffuse><specular>0.05 0.05 0.05 1</specular></material></visual><collision name="mat_col"><pose>0 0 0.005 0 0 0</pose><geometry><box><size>8 2 0.01</size></box></geometry></collision></link>
+  </model>
+</sdf>

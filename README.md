@@ -52,12 +52,28 @@ docker compose down                         # 全部關掉
 
 ```bash
 # 在 deploy/sim/ 執行
-./run.sh                       # build（第一次）並啟動 simulator、fc_adapter，前景執行，Ctrl-C 結束
-GUI=0 ./run.sh                 # 不開 Gazebo 視窗
-WORLD=<檔名> ./run.sh          # 換 sim/worlds/ 底下的世界檔
-./mission.sh                   # 行為樹過門：有門、相機、偵測的世界（orca_qgate.sdf），見 docs/sim/README.md
-./gate_pass.sh                 # 舊版過門（mission/gate_pass.py）
+
+# 只起環境（Gazebo + SITL + fc_adapter；世界有相機時再加 sim_cameras、object_detector），不跑任務
+./run.sh                                          # 空泳池（orca_pool.sdf），前景執行，Ctrl-C 結束
+WORLD=sauvc27_finals.sdf ./run.sh -d              # SAUVC 2027 決賽場地，背景執行
+WORLD=sauvc27_qualification.sdf ./run.sh -d       # SAUVC 2027 資格賽場地
+WORLD=sauvc27_finals.sdf ./run.sh -d --force-recreate   # 重開一次（船回到起點）
+GUI=0 WORLD=<檔名> ./run.sh -d                    # 不開 Gazebo 視窗
+docker compose --profile vision down              # 全部關掉
+
+# 起環境並跑行為樹（不用先 run.sh；每次都重開 simulator，船回到起點）
+WORLD=sauvc27_finals.sdf ./mission.sh gate_pass -p depth=1.0   # 決賽：過導航門（橫桿在水下 0.5 m，要潛 1.0 m）
+WORLD=sauvc27_qualification.sdf ./mission.sh gate_pass         # 資格賽：過資格賽門（只過一次，還沒有 U-turn）
+WORLD=orca_pool.sdf ./mission.sh smoke_test                    # 動作測試，不需要門
+./gate_pass.sh                                                 # 舊版過門（mission/gate_pass.py）
 ```
+
+| 世界（`sim/worlds/`） | 內容 |
+|---|---|
+| `sauvc27_finals.sdf` | **SAUVC 2027 決賽**：50 × 25 m 泳池、導航門、flare、桶、Surfacing Square，見 [docs/sim/sauvc2027-arena.md](docs/sim/sauvc2027-arena.md) |
+| `sauvc27_qualification.sdf` | **SAUVC 2027 資格賽**：三條資格賽道、從水面垂下 1 m 的門 |
+| `orca_qgate.sdf`、`orca_gate.sdf` | 2026 版的小泳池（25 × 16 m）＋資格賽門／導航門，`./mission.sh`、`./gate_pass.sh` 不指定 `WORLD` 時用 `orca_qgate.sdf` |
+| `orca_pool.sdf` | 只有泳池和船，沒有相機，`./run.sh` 的預設 |
 
 QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，否則跟 mavros 的搖桿指令打架。
 
@@ -67,7 +83,7 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 
 | 功能 | 指令 | 說明 |
 |---|---|---|
-| 過門（行為樹） | `./mission.sh` | 起服務、等飛控與偵測就緒，再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
+| 過門（行為樹） | `./mission.sh` | 模擬要選場地時前面加 `WORLD=<世界檔>`，見上面的模擬指令。起服務、等飛控與偵測就緒，再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
 | 過門（舊版狀態機） | `./gate_pass.sh` | 起服務、等飛控／相機／偵測就緒、解鎖前等你按 Enter（模擬不等），然後下潛 → 對準 → 前進 → 盲走過門 → 上鎖。可加參數，例如 `./gate_pass.sh --depth 0.3 --surge 0.2 --pass-s 5`，全部參數見 [`mission/gate_pass.py`](mission/gate_pass.py) 的 `Params` |
 | 水池測試：定深 | `docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'` | 預設 0.15 → 0.20 → 0.10 m。要改就把深度接在後面，例如 `water_depth.py 0.1 0.2` |
 | 水池測試：定向 | 同上，檔名換成 `water_heading.py` | 定深 0.15 m，預設 90 → 0 → −90 → 0°。要改就把角度接在後面，例如 `water_heading.py 45 0` |
@@ -77,7 +93,7 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 | 過門流程測試（不需要 ROS） | `python3 mission/test_gate_pass.py` | 用簡化模型檢查流程邏輯與正負號，CI 也會跑 |
 | 行為樹測試 | `cd src/orca_mission && python3 -m pytest test` | 要有 py_trees（或在 `mission` 容器裡跑）。含用簡化模型跑完整過門的情境，CI 也會跑 |
 
-- 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh` 已經跑過。
+- 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh`、`./mission.sh` 已經跑過。
 - 測試腳本和過門都會先列檢查清單、歸零（以浮在水面時的深度與航向為 0）。任何時候 Ctrl-C 都會上鎖，船浮上來。
 - 紀錄 CSV 存在 `deploy/<跑法>/logs/fc_adapter/`（測試腳本、舊版過門）與 `deploy/<跑法>/logs/mission/`（行為樹）。
 - 實機跑 `docker compose up -d`、`./mission.sh` 或 `./gate_pass.sh` 時，`recorder` 會把所有 topic（mavros、`/auv_control`、`/detections`、相機 JPEG、`/rosout` 的節點 log）錄成 rosbag，存在 `deploy/laptop/logs/bag/<啟動時間>/`，每 5 分鐘切一個 `.mcap` 檔，約 3 GB／小時。原始影像與 `/detections/image` 不錄。用 Foxglove 直接開 `.mcap`，或 `docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>` 回放（先 `docker compose down`）。

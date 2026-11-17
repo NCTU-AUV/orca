@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!--
+出發區（規則書 §8.2）：水面上 140 × 140 cm 的浮框。
+  船只能放在這裡的水面，離開出發區前要自己下潛。只有外觀（沒有碰撞），不影響船出發。原點在水面、框中心。
+
+  由 sim/arena/sauvc2027.py 產生，不要手改。
+-->
+<sdf version="1.9">
+  <model name="sauvc27_starting_zone">
+    <static>true</static>
+    <link name="frame"><visual name="pipe_north"><pose>0 0.68 0 0 0 0</pose><geometry><box><size>1.4 0.04 0.04</size></box></geometry><material><ambient>0.376 0.38 0.384 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.05 0.05 0.05 1</specular></material></visual><visual name="pipe_south"><pose>0 -0.68 0 0 0 0</pose><geometry><box><size>1.4 0.04 0.04</size></box></geometry><material><ambient>0.376 0.38 0.384 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.05 0.05 0.05 1</specular></material></visual><visual name="pipe_east"><pose>0.68 0 0 0 0 0</pose><geometry><box><size>0.04 1.32 0.04</size></box></geometry><material><ambient>0.376 0.38 0.384 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.05 0.05 0.05 1</specular></material></visual><visual name="pipe_west"><pose>-0.68 0 0 0 0 0</pose><geometry><box><size>0.04 1.32 0.04</size></box></geometry><material><ambient>0.376 0.38 0.384 1</ambient><diffuse>0.94 0.95 0.96 1</diffuse><specular>0.05 0.05 0.05 1</specular></material></visual></link>
+  </model>
+</sdf>

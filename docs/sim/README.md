@@ -26,20 +26,25 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 以下指令都在 `deploy/sim/` 底下執行。
 
 ```bash
-./run.sh            # build（第一次）並啟動，前景執行，Ctrl-C 結束
-GUI=0 ./run.sh      # 不開 Gazebo 視窗
+./run.sh                                          # 空泳池（orca_pool.sdf），build（第一次）並啟動，前景執行，Ctrl-C 結束
+GUI=0 ./run.sh                                    # 不開 Gazebo 視窗
+WORLD=sauvc27_finals.sdf ./run.sh -d              # SAUVC 2027 決賽場地，背景執行
+WORLD=sauvc27_qualification.sdf ./run.sh -d       # SAUVC 2027 資格賽場地
+WORLD=sauvc27_finals.sdf ./run.sh -d --force-recreate   # 重開一次（船回到起點）
+docker compose --profile vision down              # 全部關掉
 ```
 
-`./run.sh` 會依序：允許容器連到 X（`xhost +SI:localuser:root`）、確認有 nvidia runtime、`docker compose up --build`。起來的東西：
+`./run.sh` 會依序：允許容器連到 X（`xhost +SI:localuser:root`）、確認有 nvidia runtime、`docker compose up --build`，其他參數（`-d`、`--force-recreate`）交給 `docker compose up`。世界檔有相機（`model://orca_cam`，除了 `orca_pool.sdf` 都有）時會加上 `vision` profile，沒有權重就先下載。起來的東西：
 
 | 服務 | 內容 |
 |---|---|
 | `simulator` | Gazebo 泳池與 Orca、ArduSub SITL、mavproxy（MAVLink 轉送到 UDP 14550 給 QGC、UDP 14551 給 mavros） |
 | `fc_adapter` | mavros 與 `auv_adapter.py`，跟實機用同一個 image，只差 mavros 設定（`mavros_sitl.yaml`） |
+| `sim_cameras`、`object_detector` | 世界有相機時才起：Gazebo 相機 → ROS 影像、RF-DETR 偵測 → `/detections` |
 
-開機後約 5 秒 EKF 對準完成（`docker compose logs fc_adapter` 出現 `MAG0 initial yaw alignment complete`），之後才能解鎖。
+開機後約 5 秒 EKF 對準完成（`docker compose logs simulator` 出現 `MAG0 initial yaw alignment complete`），之後才能解鎖。
 
-背景執行：`docker compose up -d`（`GUI=1` 時要先自己跑 `xhost +SI:localuser:root`），停止：`docker compose down`。
+只起環境不會跑任務；要跑行為樹用下面的 `./mission.sh`（它自己會起環境，不用先 `./run.sh`）。世界檔的列表見[過門](#過門有門相機偵測)那一節。
 
 ### 跑實機的測試程式
 
@@ -73,9 +78,11 @@ docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py   # --g
 行為樹版（[`src/orca_mission`](../../src/orca_mission/README.md)，流程寫在 `trees/gate_pass.yaml`）：
 
 ```bash
-./mission.sh                                      # 資格賽門，開 Gazebo 視窗
+WORLD=sauvc27_finals.sdf ./mission.sh gate_pass -p depth=1.0   # SAUVC 2027 決賽：過導航門
+WORLD=sauvc27_qualification.sdf ./mission.sh gate_pass         # SAUVC 2027 資格賽：過資格賽門
+./mission.sh                                      # 2026 小泳池的資格賽門（orca_qgate.sdf），開 Gazebo 視窗
 GUI=0 ./mission.sh gate_pass -p pass_s=6          # 不開視窗；-p 覆寫樹的 vars
-WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
+WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 2026 小泳池的導航門
 WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉向、前進），不需要門
 ```
 
@@ -95,6 +102,10 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 |---|---|
 | `orca_qgate.sdf`（預設） | 資格賽門（`models/q_gate`），從水面垂到池底，任何深度都能過；在船頭前方 6 m、偏右 1 m |
 | `orca_gate.sdf` | 導航門（`models/gate`），立在池底、高 1 m，橫桿在水下 1.6 − 1.0 = 0.6 m：船要潛到約 0.9 m 才不會從橫桿上方經過 |
+| `sauvc27_qualification.sdf` | **SAUVC 2027 資格賽場地**：50 × 25 m 泳池、三條資格賽道，門在起點 10 m 外、從水面垂下 1 m |
+| `sauvc27_finals.sdf` | **SAUVC 2027 決賽場地**：導航門（1.5 m 高）、橘色 flare、target zone 與四個桶、紅黃藍 flare、Surfacing Square、出發區 |
+
+2027 的兩個場地依 2027 規則書做，尺寸、座標、假設、隨機佈局見 [sauvc2027-arena.md](sauvc2027-arena.md)。決賽一定要 `-p depth=1.0`：導航門的橫桿在水下 0.5 m，`gate_pass` 預設的 0.3 m 會從橫桿上面過去。
 
 - 兩個世界的船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）和一顆朝下的底部相機（640×480、10 Hz、水平視角 70°，影像上方 = 船頭；實機規格還沒定）。
 - 門的模型取自 [SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 依 2026 規則書做的版本。
@@ -161,14 +172,17 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 
 | 路徑（repo 根目錄起算） | 內容 |
 |---|---|
-| `deploy/sim/run.sh`、`deploy/sim/compose.yaml` | 啟動 |
+| `deploy/sim/run.sh`、`deploy/sim/compose.yaml` | 只起環境（世界有相機時含相機、偵測） |
 | `docker/sim.Dockerfile` | ROS 2 Humble + Gazebo Harmonic + ArduSub Sub-4.7.2 SITL + [ardupilot_gazebo](https://github.com/ArduPilot/ardupilot_gazebo) 外掛 + MAVProxy |
 | `sim/start.sh` | 依序啟動 gz sim、ardusub、mavproxy |
 | `firmware/ardusub/sitl.parm` | 飛控參數（取自實機）與 SITL 模擬硬體參數 |
 | `sim/worlds/orca_pool.sdf` | 泳池世界（25 × 16 m、深 1.6 m，水面 z = 0） |
 | `sim/worlds/orca_qgate.sdf`、`orca_gate.sdf` | 泳池 + 有相機的 Orca + 資格賽門／導航門 |
 | `sim/models/pool/`、`sim/models/orca/` | 泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin） |
-| `sim/models/orca_cam/`、`gate/`、`q_gate/` | Orca + 前視相機、導航門、資格賽門 |
+| `sim/models/orca_cam/`、`gate/`、`q_gate/` | Orca + 前視相機、導航門、資格賽門（2026 規則書） |
+| `sim/arena/sauvc2027.py` | SAUVC 2027 場地產生器：`sim/models/sauvc27_*` 和 `sim/worlds/sauvc27_*.sdf` 都由它產生 |
+| `sim/arena/make_pool_textures.py` | 2027 泳池的地板、池壁貼圖 |
+| `sim/worlds/sauvc27_qualification.sdf`、`sauvc27_finals.sdf` | SAUVC 2027 資格賽、決賽場地（旁邊的 `.layout.json` 是道具位置的真值） |
 | `sim/gz_camera_bridge.py` | Gazebo 前視、底部相機 → ROS 影像（`sim_cameras` 服務） |
 | `deploy/sim/mission.sh` | 一個指令跑行為樹（預設過門） |
 | `deploy/sim/gate_pass.sh` | 一個指令跑舊版過門 |
@@ -177,6 +191,7 @@ WORLD=orca_gate.sdf ./gate_pass.sh --depth 0.9
 
 ## 之後要加東西
 
-- 比賽道具：另寫一個世界檔 `<include>` 泳池與 `orca_cam`（要相機）或 `orca`，用 `WORLD=<檔名>` 載入。過門的兩個世界檔可以當範本。
+- 比賽道具：SAUVC 2027 的場地改 `sim/arena/sauvc2027.py` 再重新產生（見 [sauvc2027-arena.md](sauvc2027-arena.md)）。其他測試用的世界另寫一個世界檔 `<include>` 泳池與 `orca_cam`（要相機）或 `orca`，用 `WORLD=<檔名>` 載入，過門的兩個世界檔可以當範本。
+- 裁判：讀 `sim/worlds/<世界>.layout.json` 的真值，加上 Gazebo 的 `/world/<世界>/dynamic_pose/info`，判定過門、碰撞、浮出水面的位置、flare 的球有沒有掉。
 - 水下成像（衰減、色偏）：SAUVC-Simulation 的 `underwater_camera_node.py` 用深度圖做，可以搬到 `gz_camera_bridge.py`。
 - ROS 橋接、視覺、任務層：在 `deploy/sim/compose.yaml` 新增服務（ROS 2 Humble、host network、`ROS_LOCALHOST_ONLY=1`），不改 `simulator`、`fc_adapter` 的埠與 topic。

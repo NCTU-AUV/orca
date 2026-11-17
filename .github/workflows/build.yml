@@ -17,7 +17,13 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py sim/gz_camera_bridge.py
+        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py sim/gz_camera_bridge.py sim/arena/*.py
+      # SAUVC 2027 場地：sim/models/sauvc27_*、sim/worlds/sauvc27_* 要跟產生器（sim/arena/sauvc2027.py）的輸出一致
+      - name: arena files up to date
+        run: |
+          cp -r sim /tmp/sim_before
+          python3 sim/arena/sauvc2027.py > /dev/null
+          diff -r /tmp/sim_before sim || { echo '請執行 python3 sim/arena/sauvc2027.py 後再 commit'; exit 1; }
       - name: mission tests
         run: python3 mission/test_gate_pass.py
       # 行為樹：執行器、TaskRunner、YAML 載入、過門流程（平面模型），以及 trees/*.md 跟 YAML 一致

@@ -85,7 +85,7 @@ services:
 
   # Gazebo 相機（sim/models/orca_cam）→ ROS，topic、frame_id 跟實機一樣：
   #   前視 /camera/camera/color/image_raw、camera_info；底部 /bottom_camera/image_raw、camera_info
-  # 世界檔要用有相機的（orca_qgate.sdf、orca_gate.sdf）
+  # 世界檔要用有相機的（orca_qgate.sdf、orca_gate.sdf、sauvc27_qualification.sdf、sauvc27_finals.sdf）
   sim_cameras:
     image: orca-sim
     profiles: [vision]

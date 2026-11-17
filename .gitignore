@@ -12,3 +12,5 @@ ml/*/weights/
 __pycache__/
 *.pyc
 .venv/
+# sim/arena/sauvc2027.py 產生的隨機佈局
+sim/worlds/generated/

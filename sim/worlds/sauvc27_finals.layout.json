@@ -1,0 +1,207 @@
+{
+  "world": "sauvc27_finals",
+  "frame": "x 沿 50 m 長邊（0 = 淺端池壁），y 沿 25 m 短邊，z 向上（0 = 水面）",
+  "props": {
+    "qual_start_1": {
+      "model": "sauvc27_qual_start_line",
+      "kind": "qualification_start",
+      "pose": [
+        0.0,
+        2.5,
+        0.0,
+        0.0
+      ]
+    },
+    "qual_gate_1": {
+      "model": "sauvc27_qual_gate",
+      "kind": "qualification_gate",
+      "pose": [
+        10.0,
+        2.5,
+        0.0,
+        1.5708
+      ]
+    },
+    "qual_start_2": {
+      "model": "sauvc27_qual_start_line",
+      "kind": "qualification_start",
+      "pose": [
+        0.0,
+        12.5,
+        0.0,
+        0.0
+      ]
+    },
+    "qual_gate_2": {
+      "model": "sauvc27_qual_gate",
+      "kind": "qualification_gate",
+      "pose": [
+        10.0,
+        12.5,
+        0.0,
+        1.5708
+      ]
+    },
+    "qual_start_3": {
+      "model": "sauvc27_qual_start_line",
+      "kind": "qualification_start",
+      "pose": [
+        0.0,
+        22.5,
+        0.0,
+        0.0
+      ]
+    },
+    "qual_gate_3": {
+      "model": "sauvc27_qual_gate",
+      "kind": "qualification_gate",
+      "pose": [
+        10.0,
+        22.5,
+        0.0,
+        1.5708
+      ]
+    },
+    "surfacing_square": {
+      "model": "sauvc27_surfacing_square",
+      "kind": "surfacing_square",
+      "pose": [
+        11.5,
+        7.0,
+        0.0,
+        0.0
+      ]
+    },
+    "starting_zone": {
+      "model": "sauvc27_starting_zone",
+      "kind": "starting_zone",
+      "pose": [
+        36.0,
+        2.0,
+        0.0,
+        0.0
+      ]
+    },
+    "gate": {
+      "model": "sauvc27_gate",
+      "kind": "gate",
+      "pose": [
+        31.5,
+        12.0,
+        -2.0,
+        0.0
+      ]
+    },
+    "orange_flare": {
+      "model": "sauvc27_orange_flare",
+      "kind": "orange_flare",
+      "pose": [
+        32.6,
+        5.4,
+        -2.0,
+        0.0
+      ]
+    },
+    "target_zone": {
+      "model": "sauvc27_target_zone",
+      "kind": "target_zone",
+      "pose": [
+        31.0,
+        23.0,
+        -2.0,
+        0.0
+      ]
+    },
+    "drum_0": {
+      "model": "sauvc27_drum_blue",
+      "kind": "blue_drum",
+      "pose": [
+        28.0,
+        23.0,
+        -1.99,
+        0.0
+      ],
+      "pinger": false
+    },
+    "drum_1": {
+      "model": "sauvc27_drum_red",
+      "kind": "red_drum",
+      "pose": [
+        30.0,
+        23.0,
+        -1.99,
+        0.0
+      ],
+      "pinger": false
+    },
+    "drum_2": {
+      "model": "sauvc27_drum_red",
+      "kind": "red_drum",
+      "pose": [
+        32.0,
+        23.0,
+        -1.99,
+        0.0
+      ],
+      "pinger": true
+    },
+    "pinger": {
+      "model": "sauvc27_pinger",
+      "kind": "pinger",
+      "pose": [
+        32.0,
+        23.0,
+        -1.98,
+        0.0
+      ]
+    },
+    "drum_3": {
+      "model": "sauvc27_drum_red",
+      "kind": "red_drum",
+      "pose": [
+        34.0,
+        23.0,
+        -1.99,
+        0.0
+      ],
+      "pinger": false
+    },
+    "yellow_flare": {
+      "model": "sauvc27_flare_yellow",
+      "kind": "yellow_flare",
+      "pose": [
+        28.4,
+        17.9,
+        -2.0,
+        0.0
+      ]
+    },
+    "red_flare": {
+      "model": "sauvc27_flare_red",
+      "kind": "red_flare",
+      "pose": [
+        39.5,
+        19.4,
+        -2.0,
+        0.0
+      ]
+    },
+    "blue_flare": {
+      "model": "sauvc27_flare_blue",
+      "kind": "blue_flare",
+      "pose": [
+        45.4,
+        16.2,
+        -2.0,
+        0.0
+      ]
+    }
+  },
+  "vehicle_start": [
+    36.0,
+    2.0,
+    -0.2,
+    1.5708
+  ],
+  "flare_order": "R-B-Y"
+}

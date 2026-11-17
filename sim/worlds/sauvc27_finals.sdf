@@ -1,0 +1,211 @@
+<?xml version="1.0"?>
+<!--
+  SAUVC 2027 決賽場地（規則書 §8、§9）。預設佈局：照官方場地圖（Figure 5）的位置。
+  船浮在出發區（140 × 140 cm），船頭朝 +y。主場地在深區（水深 2 m）：
+    - 導航門：y = 12 m 的線上（x = 31.50），150 × 150 cm，立在池底，紅柱在左舷
+    - 橘色 flare：y 4–8 m 的帶狀區，碰到就中止
+    - target zone：綠色墊 8 × 2 m，四個桶（一藍三紅），其中一個紅桶有 pinger
+    - 紅、黃、藍 flare，頂上有高爾夫球；這次的順序 R-B-Y（完成導航後才告知）
+    - Surfacing Square：資格賽門旁的水面
+  資格賽的門和起點也在池裡（同一個泳池），當作環境的一部分。
+
+  由 sim/arena/sauvc2027.py 產生，不要手改；道具位置的真值在旁邊的 sauvc27_finals.layout.json。
+  座標：原點在淺端、出發區那一側的池角水面；x 沿 50 m 長邊，y 沿 25 m 短邊，z 向上。
+-->
+<sdf version="1.9">
+  <world name="sauvc27_finals">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <!-- 相機的算圖。ogre2；沒開 GUI 時 start.sh 會加 headless rendering -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <!-- 更新模型裡的 IMU 感測器（ArduPilotPlugin 讀它） -->
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <!-- 水的浮力：z < 0 為 1000 kg/m^3，z > 0 為空氣 -->
+    <plugin filename="gz-sim-buoyancy-system" name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1000</default_density>
+        <density_change>
+          <above_depth>0</above_depth>
+          <density>1</density>
+        </density_change>
+      </graded_buoyancy>
+    </plugin>
+
+    <scene>
+      <ambient>0.7 0.72 0.74 1</ambient>
+      <background>0.8 0.88 0.92 1</background>
+    </scene>
+
+    <!-- 室內泳池：接近正上方的柔和主光，加兩道低角度補光讓四面池壁都看得到 -->
+    <light type="directional" name="sun">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.75 0.76 0.78 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <direction>-0.15 0.08 -0.98</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="directional" name="wall_fill_a">
+      <pose>0 0 5 0 0 0</pose>
+      <diffuse>0.3 0.31 0.32 1</diffuse>
+      <specular>0 0 0 1</specular>
+      <direction>0.82 0.41 -0.41</direction>
+      <cast_shadows>false</cast_shadows>
+    </light>
+    <light type="directional" name="wall_fill_b">
+      <pose>0 0 5 0 0 0</pose>
+      <diffuse>0.3 0.31 0.32 1</diffuse>
+      <specular>0 0 0 1</specular>
+      <direction>-0.82 -0.41 -0.41</direction>
+      <cast_shadows>false</cast_shadows>
+    </light>
+
+    <include>
+      <uri>model://sauvc27_pool</uri>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+
+    <!-- 資格賽 Arena 1：池壁上的起點標記、10 m 外的資格賽門（門面朝 +x） -->
+    <include>
+      <uri>model://sauvc27_qual_start_line</uri>
+      <name>qual_start_1</name>
+      <pose>0 2.5 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://sauvc27_qual_gate</uri>
+      <name>qual_gate_1</name>
+      <pose>10 2.5 0 0 0 1.5708</pose>
+    </include>
+
+    <!-- 資格賽 Arena 2：池壁上的起點標記、10 m 外的資格賽門（門面朝 +x） -->
+    <include>
+      <uri>model://sauvc27_qual_start_line</uri>
+      <name>qual_start_2</name>
+      <pose>0 12.5 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://sauvc27_qual_gate</uri>
+      <name>qual_gate_2</name>
+      <pose>10 12.5 0 0 0 1.5708</pose>
+    </include>
+
+    <!-- 資格賽 Arena 3：池壁上的起點標記、10 m 外的資格賽門（門面朝 +x） -->
+    <include>
+      <uri>model://sauvc27_qual_start_line</uri>
+      <name>qual_start_3</name>
+      <pose>0 22.5 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://sauvc27_qual_gate</uri>
+      <name>qual_gate_3</name>
+      <pose>10 22.5 0 0 0 1.5708</pose>
+    </include>
+
+    <!-- Surfacing Square：浮在資格賽門旁的水面 -->
+    <include>
+      <uri>model://sauvc27_surfacing_square</uri>
+      <name>surfacing_square</name>
+      <pose>11.5 7 0 0 0 0</pose>
+    </include>
+
+    <!-- 出發區（水面浮框） -->
+    <include>
+      <uri>model://sauvc27_starting_zone</uri>
+      <name>starting_zone</name>
+      <pose>36 2 0 0 0 0</pose>
+    </include>
+
+    <!-- Orca + 前視、底部相機（model://orca_cam）；浮在水面，任務開始時歸零 -->
+    <include>
+      <uri>model://orca_cam</uri>
+      <pose>36 2 -0.2 0 0 1.5708</pose>
+    </include>
+
+    <!-- 導航門：從 -y 往 +y 穿過，紅柱（port）在 -x -->
+    <include>
+      <uri>model://sauvc27_gate</uri>
+      <name>gate</name>
+      <pose>31.5 12 -2 0 0 0</pose>
+    </include>
+
+    <!-- 橘色 flare（障礙物） -->
+    <include>
+      <uri>model://sauvc27_orange_flare</uri>
+      <name>orange_flare</name>
+      <pose>32.6 5.4 -2 0 0 0</pose>
+    </include>
+
+    <!-- Target zone 綠色墊 -->
+    <include>
+      <uri>model://sauvc27_target_zone</uri>
+      <name>target_zone</name>
+      <pose>31 23 -2 0 0 0</pose>
+    </include>
+
+    <!-- blue 桶 -->
+    <include>
+      <uri>model://sauvc27_drum_blue</uri>
+      <name>drum_0</name>
+      <pose>28 23 -1.99 0 0 0</pose>
+    </include>
+
+    <!-- red 桶 -->
+    <include>
+      <uri>model://sauvc27_drum_red</uri>
+      <name>drum_1</name>
+      <pose>30 23 -1.99 0 0 0</pose>
+    </include>
+
+    <!-- red 桶（有 pinger） -->
+    <include>
+      <uri>model://sauvc27_drum_red</uri>
+      <name>drum_2</name>
+      <pose>32 23 -1.99 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://sauvc27_pinger</uri>
+      <name>pinger</name>
+      <pose>32 23 -1.98 0 0 0</pose>
+    </include>
+
+    <!-- red 桶 -->
+    <include>
+      <uri>model://sauvc27_drum_red</uri>
+      <name>drum_3</name>
+      <pose>34 23 -1.99 0 0 0</pose>
+    </include>
+
+    <!-- yellow flare -->
+    <include>
+      <uri>model://sauvc27_flare_yellow</uri>
+      <name>yellow_flare</name>
+      <pose>28.4 17.9 -2 0 0 0</pose>
+    </include>
+
+    <!-- red flare -->
+    <include>
+      <uri>model://sauvc27_flare_red</uri>
+      <name>red_flare</name>
+      <pose>39.5 19.4 -2 0 0 0</pose>
+    </include>
+
+    <!-- blue flare -->
+    <include>
+      <uri>model://sauvc27_flare_blue</uri>
+      <name>blue_flare</name>
+      <pose>45.4 16.2 -2 0 0 0</pose>
+    </include>
+
+  </world>
+</sdf>

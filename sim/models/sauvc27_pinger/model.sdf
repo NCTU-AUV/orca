@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!--
+桶裡的 pinger（規則書 §9.2：RJE ULB-362B/45 kHz）。只有外觀，沒有模擬聲學訊號。
+  放在其中一個紅桶的桶底，原點在桶底。
+
+  由 sim/arena/sauvc2027.py 產生，不要手改。
+-->
+<sdf version="1.9">
+  <model name="sauvc27_pinger">
+    <static>true</static>
+    <link name="pinger"><visual name="body"><pose>0 0 0.06 0 0 0</pose><geometry><cylinder><radius>0.025</radius><length>0.1</length></cylinder></geometry><material><ambient>0.06 0.06 0.06 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse><specular>0.05 0.05 0.05 1</specular></material></visual></link>
+  </model>
+</sdf>

@@ -6,6 +6,8 @@
 #   ./mission.sh gate_pass -p pass_s=6                # -p 覆寫樹的 vars
 #   WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
 #   WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（不需要門）
+#   WORLD=sauvc27_qualification.sdf ./mission.sh      # SAUVC 2027 資格賽場地（docs/sim/sauvc2027-arena.md）
+#   WORLD=sauvc27_finals.sdf ./mission.sh gate_pass -p depth=1.0   # SAUVC 2027 決賽場地
 #   GUI=0 ./mission.sh                                # 不開 Gazebo 視窗
 #
 # - 每次執行都會重開 simulator，船從水面、原點開始；其他服務沿用已經在跑的。
