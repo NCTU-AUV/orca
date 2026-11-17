@@ -5,6 +5,7 @@
 #   ./up.sh                               # 可以先起好容器、確認就緒（不跑也行，這裡會代跑）
 #   ./mission.sh                          # gate_pass
 #   ./mission.sh gate_pass -p pass_s=6    # -p 覆寫樹的 vars
+#   ./mission.sh gate_pass_yaw            # 過門，下潛後先轉向對準門再鎖航向
 #   ./mission.sh smoke_test               # 動作測試（不需要門）
 #   RECORD=0 ./mission.sh                 # 不錄 rosbag
 #

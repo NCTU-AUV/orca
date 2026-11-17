@@ -4,13 +4,15 @@
 
 | 樹 | 內容 | 流程圖 |
 |---|---|---|
-| `gate_pass` | 過門，流程和參數跟 `mission/gate_pass.py` 一樣 | [gate_pass.md](trees/gate_pass.md) |
+| `gate_pass` | 過門：航向從解鎖起就鎖住（歸零時的船頭方向），對準只用 sway 平移 | [gate_pass.md](trees/gate_pass.md) |
+| `gate_pass_yaw` | 過門：下潛後先原地轉 yaw 對準門、鎖住當下的航向，之後跟 `gate_pass` 一樣 | [gate_pass_yaw.md](trees/gate_pass_yaw.md) |
 | `smoke_test` | 動作測試（下潛、轉向、前進、上浮），不需要相機 | [smoke_test.md](trees/smoke_test.md) |
 
 ## 跑
 
 ```bash
 deploy/sim/mission.sh                               # 模擬：過門（資格賽門）
+deploy/sim/mission.sh gate_pass_yaw                 # 模擬：過門，下潛後先轉向對準門再鎖航向
 WORLD=orca_pool.sdf deploy/sim/mission.sh smoke_test
 deploy/laptop/up.sh                                 # 實機：起容器、等就緒（映像不存在或過期才 build，已經在跑的不重開）
 deploy/laptop/mission.sh                            # 實機：過門（會先跑 up.sh），解鎖前列檢查清單、等 Enter

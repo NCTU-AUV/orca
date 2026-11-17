@@ -4,6 +4,7 @@
 #
 #   ./mission.sh                                      # gate_pass，資格賽門（orca_qgate.sdf）
 #   ./mission.sh gate_pass -p pass_s=6                # -p 覆寫樹的 vars
+#   ./mission.sh gate_pass_yaw                        # 過門，下潛後先轉向對準門再鎖航向
 #   WORLD=orca_gate.sdf ./mission.sh gate_pass -p depth=0.9   # 導航門
 #   WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（不需要門）
 #   GUI=0 ./mission.sh                                # 不開 Gazebo 視窗

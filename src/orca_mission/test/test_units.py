@@ -130,7 +130,7 @@ def test_runner_idle_active_finish():
 # ---------- YAML ----------
 
 def test_trees_load():
-    for name in ('gate_pass', 'smoke_test'):
+    for name in ('gate_pass', 'gate_pass_yaw', 'smoke_test'):
         spec = read(os.path.join(TREES, name + '.yaml'))
         root = build(spec, Context())
         assert root.name and spec['name'] == name

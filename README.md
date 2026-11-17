@@ -70,7 +70,7 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 
 | 功能 | 指令 | 說明 |
 |---|---|---|
-| 過門（行為樹） | `./mission.sh` | 起服務、等飛控與偵測就緒（實機是 `./up.sh`：映像不存在或過期才 build，已經在跑的容器不重開），再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
+| 過門（行為樹） | `./mission.sh` | 起服務、等飛控與偵測就緒（實機是 `./up.sh`：映像不存在或過期才 build，已經在跑的容器不重開），再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh gate_pass_yaw` 是下潛後先轉 yaw 對準門、再鎖航向的版本（[`gate_pass_yaw.yaml`](src/orca_mission/trees/gate_pass_yaw.yaml)，流程圖 [gate_pass_yaw.md](src/orca_mission/trees/gate_pass_yaw.md)）；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
 | 過門（舊版狀態機） | `./gate_pass.sh` | 起服務、等飛控／相機／偵測就緒、解鎖前等你按 Enter（模擬不等），然後下潛 → 對準 → 前進 → 盲走過門 → 上鎖。可加參數，例如 `./gate_pass.sh --depth 0.3 --surge 0.2 --pass-s 5`，全部參數見 [`mission/gate_pass.py`](mission/gate_pass.py) 的 `Params` |
 | 水池測試：定深 | `docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'` | 預設 0.15 → 0.20 → 0.10 m。要改就把深度接在後面，例如 `water_depth.py 0.1 0.2` |
 | 水池測試：定向 | 同上，檔名換成 `water_heading.py` | 定深 0.15 m，預設 90 → 0 → −90 → 0°。要改就把角度接在後面，例如 `water_heading.py 45 0` |
