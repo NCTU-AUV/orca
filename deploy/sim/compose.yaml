@@ -257,6 +257,7 @@ services:
       - SWEEP_WORLD=${SWEEP_WORLD:-sauvc_final.sdf}
       - GIT_REV=${GIT_REV:-}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ../../sim:/sim:ro
       - ../../tools:/orca/tools:ro
       - ./logs/detect:/out
@@ -273,6 +274,7 @@ services:
     environment:
       - RUN=${RUN:-}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ../../tools:/orca/tools:ro
       - ../../ml/rfdetr/weights:/model:ro
       - ./logs/detect:/out

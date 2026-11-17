@@ -22,7 +22,8 @@ rfdetr 與權重）。也可以單獨對已經拍好的資料重算（例如換�
                細的東西（flare 的桿子、門柱）在遠處只有幾個像素寬，IoU 很容易偏低，所以用中心點補。
     平均信心   偵測到的那些影像裡，配對到的框的分數平均。
     最遠偵測距離   有任何一張偵測到的最大距離。
-    連續偵測距離   從最近的距離往外，每個距離的偵測率都 ≥ 50% 能到多遠。
+    連續偵測距離   從第一個偵測率 ≥ 50% 的距離往外，每個距離都 ≥ 50% 能到多遠（太近時道具超出畫面，偵測率本來就低，
+               所以開頭不到 50% 的距離跳過；報告寫成「起點～終點」）。
     資格賽門（q_gate）另外算「認成 gate 也算」的寬鬆版本：過門的行為樹兩類都接受。
     被認成別的類別   分數 ≥ 0.4、跟真值框 IoU ≥ 0.3、但類別不對的框（只用 IoU：門、浮框的真值框很大，
                後面的 drum、flare 的框中心也會落在裡面，那不算認錯）。
@@ -131,13 +132,18 @@ def stats(rows):
     by_d = defaultdict(list)
     for r in vis:
         by_d[r['distance']].append(r['hit'])
-    cont = None
+    # 連續偵測距離：太近時道具超出畫面、偵測率本來就低，所以從第一個 ≥ 50% 的距離開始，往外到第一次掉到 50% 以下為止
+    start = cont = None
     for d in sorted(by_d):
-        if np.mean(by_d[d]) >= 0.5:
+        ok = np.mean(by_d[d]) >= 0.5
+        if start is None:
+            if ok:
+                start = cont = d
+        elif ok:
             cont = d
         else:
             break
-    s['continuous_dist'] = cont
+    s['continuous_from'], s['continuous_dist'] = start, cont
     s['by_distance'] = {str(d): dict(visible=len(v), rate=round(float(np.mean(v)), 3)) for d, v in sorted(by_d.items())}
     for key in ('depth', 'bearing'):
         g = defaultdict(list)
@@ -161,6 +167,12 @@ def num(x, fmt='{:g}'):
     return '—' if x is None else fmt.format(x)
 
 
+def rng(st):
+    if st.get('continuous_dist') is None:
+        return '—'
+    return f'{st["continuous_from"]:g}～{st["continuous_dist"]:g}'
+
+
 def write_report(run_dir, meta, summary, props):
     L = []
     L.append(f'# 偵測驗證：{meta["run"]}\n')
@@ -169,7 +181,8 @@ def write_report(run_dir, meta, summary, props):
     L.append(f'- 位姿：距離 {meta["distances"]} m × 角度 {meta["bearings"]}° × 深度 {meta["depths"]} m，'
              f'共 {meta["poses"]} 個（出了泳池、低於池底、太靠近別的道具的跳過）。每個位姿拍「水下效果關」與「開」各一張')
     uw = meta['underwater']
-    L.append(f'- 水下效果（開）：強度 {uw["strength"]}，衰減 {uw["atten"]}、散射 {uw["scatter"]}、水色 {uw["veil"]}、'
+    r3 = lambda v: [round(x, 3) for x in v]     # noqa: E731
+    L.append(f'- 水下效果（開）：強度 {uw["strength"]}，衰減 {r3(uw["atten"])}、散射 {r3(uw["scatter"])}、水色 {r3(uw["veil"])}、'
              f'模糊 {uw["blur"]} px、噪點 {uw["noise"]}（sim/underwater.py）')
     L.append(f'- 「看得到」= 真值框至少 {MIN_VISIBLE_PX} 個像素；偵測率只算看得到的影像。判定規則見 tools/sim_detect/evaluate.py 檔頭\n')
 
@@ -181,11 +194,11 @@ def write_report(run_dir, meta, summary, props):
         lab = ', '.join(meta['props'][p]['labels']) or '（沒有這一類）'
         L.append(f'| {NAMES_ZH.get(p, p)} | {lab} | {a["visible"]}／{b["visible"]} | {pct(a["rate"])} → {pct(b["rate"])} | '
                  f'{num(a["mean_conf"], "{:.2f}")} → {num(b["mean_conf"], "{:.2f}")} | {num(a["max_dist"])} → {num(b["max_dist"])} | '
-                 f'{num(a["continuous_dist"])} → {num(b["continuous_dist"])} |')
+                 f'{rng(a)} → {rng(b)} |')
     if 'q_gate' in props:
         a, b = summary['props']['q_gate']['off'], summary['props']['q_gate']['on']
         L.append(f'\n資格賽門認成 `gate` 也算（過門的行為樹兩類都接受）：偵測率 {pct(a["rate_alt"])} → {pct(b["rate_alt"])}。')
-    L.append('\n「連續偵測距離」：從最近的距離往外，每個距離的偵測率都 ≥ 50% 能到多遠。\n')
+    L.append('\n「連續偵測距離」：從第一個偵測率 ≥ 50% 的距離往外，每個距離都 ≥ 50% 的範圍（太近時道具超出畫面，開頭不到 50% 的跳過）。\n')
 
     L.append('## 依距離\n')
     dists = [str(float(d)) for d in meta['distances']]

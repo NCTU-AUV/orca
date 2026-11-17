@@ -2,7 +2,7 @@
 # 偵測驗證：用現有的 RF-DETR 權重跑模擬畫面，量「哪個道具在多遠、什麼角度、什麼深度偵測得到」，
 # 水下效果開與關各一輪。位姿是程式擺的（不用開船），每次跑結果一樣。
 #
-#   ./detect_sweep.sh                         # 全部道具，約 1800 張影像，拍攝約 10 分鐘 + 推論約 3 分鐘
+#   ./detect_sweep.sh                         # 全部道具，約 1500 張影像，拍攝約 4 分鐘 + 推論約 1 分鐘（RTX 3060 Laptop）
 #   QUICK=1 ./detect_sweep.sh                 # 試跑：每個道具 3 個距離
 #   PROPS=gate,q_gate ./detect_sweep.sh       # 只跑這些道具（gate q_gate orange_flare flare_red flare_yellow
 #                                             #   flare_blue drum_red drum_blue surfacing_square）

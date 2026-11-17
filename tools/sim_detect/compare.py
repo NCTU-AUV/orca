@@ -48,7 +48,7 @@ def main():
                   f'{fmt(x["rate"], True) + " → " + fmt(y["rate"], True):<16}'
                   f'{fmt(x["mean_conf"]) + " → " + fmt(y["mean_conf"]):<16}'
                   f'{fmt(x["max_dist"]) + " → " + fmt(y["max_dist"]):<14}'
-                  f'{fmt(x["continuous_dist"]) + " → " + fmt(y["continuous_dist"]):<14}')
+                  f'{fmt(x.get("continuous_dist")) + " → " + fmt(y.get("continuous_dist")):<14}')
 
 
 if __name__ == '__main__':
