@@ -54,6 +54,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3-pip \
 # 只做非互動的 MAVLink 轉送，不需要 MAVProxy 的地圖、繪圖等相依（opencv、vtk、matplotlib）
 RUN pip3 install --no-cache-dir --no-deps MAVProxy==1.8.75 pymavlink==2.4.50 \
  && pip3 install --no-cache-dir pyserial
+# 相機影像的水下後處理（sim/underwater.py）用 OpenCV 做模糊與縮放。headless 版不帶 GUI 相依。
+# --no-deps：numpy 用 ROS 帶的那一版（apt 的 1.21），不要讓 pip 另外裝一份。
+# 版本鎖在 4.6：4.7 之後的 cv2.typing 需要 numpy >= 1.22，配 1.21 會 import 失敗
+RUN pip3 install --no-cache-dir --no-deps opencv-python-headless==4.6.0.66
 
 COPY --from=build /src/ardupilot/build/sitl/bin/ardusub /usr/local/bin/ardusub
 COPY --from=build /src/ardupilot_gazebo/build/libArduPilotPlugin.so /usr/local/lib/ardupilot_gazebo/
