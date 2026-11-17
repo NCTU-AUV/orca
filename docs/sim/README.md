@@ -39,7 +39,8 @@ RECORD=0 ./mission.sh                                # 不錄 rosbag
 ```bash
 ./run.sh                       # simulator + fc_adapter，前景執行，Ctrl-C 結束
 GUI=0 ./run.sh                 # 不開 Gazebo 視窗
-WORLD=sauvc_qual.sdf ./run.sh  # 換 sim/worlds/ 底下的世界檔（預設 orca_pool.sdf）
+WORLD=sauvc_qual.sdf ./run.sh  # 換 sim/worlds/ 底下的世界檔（預設 orca_pool.sdf）；有相機的世界會連相機與偵測一起起
+./run.sh -d                    # 背景執行（其他參數都交給 docker compose up）
 ```
 
 起來約 5 秒後 EKF 對準，就可以另開終端機（同樣在 `deploy/sim/`）：

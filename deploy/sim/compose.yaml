@@ -4,8 +4,8 @@
 # 過門（有門、相機、偵測的世界）：
 #   ./mission.sh                  行為樹版（src/orca_mission/trees/gate_pass.yaml，mission 服務）
 #   ./gate_pass.sh                舊版（mission/gate_pass.py，在 fc_adapter 容器裡跑）
-#   sim_cameras、object_detector 在 vision profile、recorder 在 record profile、mission 在 mission profile，
-#   平常的 ./run.sh 不會起它們
+#   sim_cameras、object_detector 在 vision profile（./run.sh 遇到有相機的世界會一起起），
+#   recorder 在 record profile、mission 在 mission profile，./run.sh 不會起它們
 # 偵測驗證（模擬畫面丟給 RF-DETR，量「哪個道具在多遠偵測得到」）：./detect_sweep.sh，見 tools/sim_detect/
 #
 # 環境變數（./run.sh、./mission.sh 都吃）：
