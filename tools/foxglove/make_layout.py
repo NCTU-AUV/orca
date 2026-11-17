@@ -56,7 +56,7 @@ config = {
     ),
     'Plot!gate': plot(
         (f'{GATE}.lateral', '偏離門中線（門寬）：CenterGate 在 ±0.1 內算對準', '#4e9a06'),
-        (f'{GATE}.width', '門框寬／畫面寬：ApproachGate 到 0.7 開始盲走', '#c4a000'),
+        (f'{GATE}.width', '門框寬／畫面寬：ApproachGate 走到完全看不到門才盲走（看過 ≥ 0.4 算近距離）', '#c4a000'),
     ),
     'Plot!depth': plot(
         (f'{MISSION}.depth', '深度 [m]（歸零後，2 Hz）', '#3465a4'),

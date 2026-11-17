@@ -1,6 +1,6 @@
 """過門的行為樹（trees/gate_pass.yaml）在平面模型裡跑。
 
-流程：下潛 → 航向鎖住、只用 sway 平移對準（CenterGate）→ 接近 → 盲走 → 停。
+流程：下潛 → 航向鎖住、只用 sway 平移對準（CenterGate）→ 接近（直到完全看不到門）→ 盲走 → 停。
 其餘情境（跟丟、逾時、資料中斷）跟 mission/test_gate_pass.py 一樣。
 
     cd src/orca_mission && python3 -m pytest test/
@@ -12,7 +12,7 @@ import os
 import pytest
 from py_trees.common import Status
 
-from harness import GATE_W, Harness, World
+from harness import CX, GATE_W, W, Harness, World
 from orca_mission.bt.loader import read
 from orca_mission.task_runner import Mode
 
@@ -61,12 +61,14 @@ def lateral_when_centered(h):
 def run(world, spec=GATE_PASS):
     h = Harness(world, spec)
     h.lateral_at = {}
+    h.ahead_at = {}
     step = world.step
 
-    def logged(cmd):        # 記錄每一步「門中心在船頭方向的左右偏離」
+    def logged(cmd):        # 記錄每一步「門中心在船頭方向的左右偏離」與「前方還有多遠」
         c, s = math.cos(math.radians(world.yaw)), math.sin(math.radians(world.yaw))
         dx, dy = world.gate_xy[0] - world.x, world.gate_xy[1] - world.y
         h.lateral_at[round(h.t, 3)] = -dx * s + dy * c
+        h.ahead_at[round(h.t, 3)] = dx * c + dy * s
         step(cmd)
     world.step = logged
     h.run()
@@ -108,12 +110,43 @@ def test_center_tol_from_vars():
     assert max(c.sway for c in h.cmds('ApproachGate')) > 0
 
 
+def test_approach_until_gate_gone_then_blind_7s():
+    """門框超過畫面寬 × 0.7 也不盲走，繼續接近；模型 1 m 內才看不到門，看不到之後才盲走預設的 7 秒。"""
+    h = run(World(gate_xy=(6.0, 0.0)))
+    assert_passed(h)
+    assert any('近距離完全看不到門' in line for line in h.logs), h.logs
+    approach = [t for t, name, _ in h.trace if name == 'ApproachGate']
+    cruise = [t for t, name, _ in h.trace if name == 'Cruise']
+    # 門框寬 0.7 大約在 1.55 m（舊版在這裡就盲走）；現在要到 1 m 內、看不到門之後才開始盲走
+    assert h.ahead_at[round(approach[-1], 3)] < h.world.min_range
+    assert any(c.surge > 0 for t, name, c in h.trace if name == 'ApproachGate' and h.ahead_at[round(t, 3)] < 1.5)
+    assert cruise[-1] - cruise[0] == pytest.approx(7.0, abs=0.15)
+
+
+class PartialBoxWorld(World):
+    """門大到兩根柱子都超出畫面時，偵測只框到中間一小塊（寬 0.2 畫面寬），之後才完全看不到。"""
+
+    def see(self):
+        seen = super().see()
+        if seen is not None and seen[1] >= W - 1:
+            return CX, 0.2 * W
+        return seen
+
+
+def test_last_boxes_narrow_still_counts_as_close():
+    """最後幾幀的框變窄：用看過最寬的門框判斷近距離，照樣盲走，不會當成遠距離跟丟停下來。"""
+    h = run(PartialBoxWorld(gate_xy=(6.0, 0.0)))
+    assert_passed(h)
+    assert any('近距離完全看不到門（最後門框寬 0.20、最寬 0.9' in line for line in h.logs), h.logs
+    assert not any('遠距離跟丟' in line for line in h.logs), h.logs
+
+
 def test_lost_when_close_goes_blind():
-    # 2.2 m 外就跟丟，模型速度 0.3 m/s：盲走要比預設的 5 秒長才走得到門（同 mission/test_gate_pass.py）
+    # 2.2 m 外就看不到門，模型速度 0.3 m/s：盲走 8 秒才走得到門（同 mission/test_gate_pass.py）
     h = Harness(World(gate_xy=(6.0, 0.5), min_range=2.2), read(GATE_PASS, {'pass_s': 8.0}))
     h.run()
     assert_passed(h)
-    assert any('近距離跟丟' in line for line in h.logs), h.logs
+    assert any('近距離完全看不到門' in line for line in h.logs), h.logs
 
 
 def test_no_gate_never_moves():

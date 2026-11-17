@@ -1,7 +1,7 @@
 // Foxglove User Script：從 /detections 算前視相機裡門的位置，跟 orca_mission 過門用的量相同
 // （src/orca_mission/orca_mission/perception.py、tasks/gate.py）：
 //   offset_x：門框中心在畫面的水平位置，中央 0、右緣 +1、左緣 -1
-//   width：門框寬 / 畫面寬。ApproachGate 到 near_width（0.7）就開始盲走
+//   width：門框寬 / 畫面寬。ApproachGate 走到完全看不到門才盲走；看過的最寬 ≥ lost_near_width（0.4）才算近距離
 //   lateral：offset_x / (2 × width) = 船偏離門中線幾個門寬。CenterGate 在 ±tol（0.1）內算對準
 // 只看前視相機（frame_id camera_color_optical_frame），標籤 gate／qualification_gate、分數 ≥ 0.5 裡最高的一個。
 // 前視的每一幀都輸出一筆；這一幀沒有門時 seen = false、數值是 NaN（曲線會斷開）。

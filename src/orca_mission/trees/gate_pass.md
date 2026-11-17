@@ -2,13 +2,13 @@
 
 <!-- 由 render_tree 從 gate_pass.yaml 產生，不要手改 -->
 
-歸零（浮在水面）→ 解鎖（航向鎖在歸零時的船頭方向）→ 下潛 → 原地用 sway 平移， 讓門中心落在船頭正前方（偏離 ≤ 門寬 × center_tol）→ 前進、左右只用 sway 修 → 門夠近（或近距離跟丟）→ 盲走 pass_s 秒 → 停 → 上鎖。
+歸零（浮在水面）→ 解鎖（航向鎖在歸零時的船頭方向）→ 下潛 → 原地用 sway 平移， 讓門中心落在船頭正前方（偏離 ≤ 門寬 × center_tol）→ 前進、左右只用 sway 修 → 門框再寬都不停，直到完全看不到門 → 盲走 pass_s 秒 → 停 → 上鎖。
 
 | 變數（-p 覆寫） | 預設 |
 |---|---|
 | `depth` | `0.3` |
 | `surge` | `0.2` |
-| `pass_s` | `9` |
+| `pass_s` | `7` |
 | `labels` | `gate/qualification_gate` |
 | `min_score` | `0.5` |
 | `center_tol` | `0.1` |
@@ -39,7 +39,7 @@ flowchart TD
   n7 -->|2| n10
   n11(["<b>接近門（ApproachGate）</b>"]):::task
   n7 -->|3| n11
-  n12(["<b>盲走過門（Cruise）</b><br/>seconds = 9"]):::task
+  n12(["<b>盲走過門（Cruise）</b><br/>seconds = 7"]):::task
   n7 -->|4| n12
   n13(["<b>停（Hold）</b>"]):::task
   n7 -->|5| n13
