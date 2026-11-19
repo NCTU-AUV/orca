@@ -21,6 +21,7 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 GUI=0 ./mission.sh                                   # 不開 Gazebo 視窗
 ./mission.sh gate_pass -p depth=0.5 -p pass_s=6      # -p 覆寫樹的 vars（depth、surge、pass_s、min_score、center_tol、ready_timeout）
 WORLD=sauvc_final.sdf ./mission.sh <樹>              # 決賽主場地（導航門、flare、drum、Surfacing Square）
+SEED=7 WORLD=sauvc_final.sdf ./mission.sh <樹>       # 決賽主場地的隨機佈局（SEED=random 隨機挑），見 world-2027.md
 WORLD=orca_pool.sdf ./mission.sh smoke_test          # 動作測試（下潛、轉向、前進），空池，不需要門和相機
 UNDERWATER=0 ./mission.sh                            # 關掉水下效果（乾淨明亮的畫面）；UNDERWATER_STRENGTH=0.5 調強度
 RECORD=0 ./mission.sh                                # 不錄 rosbag
