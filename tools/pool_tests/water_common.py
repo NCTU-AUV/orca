@@ -2,8 +2,10 @@
 """下水測試（water_*.py）共用的部分，不單獨執行。
 
 - 以 20 Hz 發 /auv_control，控制來源固定是自主程式（SW_AUTO）。
-- 讀飛控狀態、深度、航向、8 顆馬達的 PWM，約 5 Hz 記錄到 /logs/<名稱>_<日期_時間>.csv
-  （容器的 /logs 掛到 deploy/<機器>/logs/fc_adapter/）。
+- 讀飛控狀態、深度、航向、8 顆馬達的 PWM，約 5 Hz 記錄到 <名稱>_<日期_時間>.csv。
+  實機在目前場次的 pool_tests/（deploy/laptop/logs/session/<場次>/pool_tests/），
+  模擬在容器的 /logs（deploy/sim/logs/fc_adapter/）。
+- 開始、結束各插一筆標記（/session/marker），開始的標記帶程式版本（deploy/laptop/pool_test.sh 傳進來）。
 - 開始前：確認 mavros、adapter 在跑、飛控上鎖，請使用者確認檢查清單，呼叫 /auv_adapter/zero 歸零。
 - 結束時（正常結束、Ctrl-C、Ctrl-Z、程式出錯都一樣）：送 MANUAL、全 0、DISARM，確認上鎖。
   上鎖後船靠浮力浮上來。
@@ -12,6 +14,7 @@
 """
 import csv
 import math
+import os
 import signal
 import threading
 import time
@@ -26,6 +29,7 @@ from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from orca_msgs.msg import AuvControl
+from orca_session.session import Marker, git_version, log_dir
 
 MAX_DEPTH = 0.50    # 池子最深 0.25 m（以浮著時為 0），目標深度不能超過
 RATE_HZ = 20
@@ -285,14 +289,20 @@ def run(name, body):
     signal.signal(signal.SIGTSTP, on_ctrl_z)
     # 不讓 rclpy 處理 Ctrl-C：它預設會先關掉 ROS，結束時的 DISARM 就送不出去
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
-    log_path = time.strftime(f'/logs/{name}_%Y%m%d_%H%M%S.csv')
+    run_name = time.strftime(f'{name}_%Y%m%d_%H%M%S')
+    folder = log_dir('pool_tests')
+    os.makedirs(folder, exist_ok=True)
+    log_path = os.path.join(folder, f'{run_name}.csv')
     t = Tester(name, log_path)
     executor = SingleThreadedExecutor()
     executor.add_node(t)
     threading.Thread(target=executor.spin, daemon=True).start()
     print(f'記錄到 {log_path}')
+    mark = Marker(t, 'pool_test')
+    mark(f'{run_name} 開始（{git_version()}）', wait=1.0)
 
     started = False     # 開始送指令後才需要收尾
+    outcome = '沒開始'  # 結束標記的內容
     try:
         if not wait_until(lambda: t.state is not None and t.state.connected, 5.0):
             print('收不到 /mavros/state 或飛控沒連線，mavros 有在跑嗎？')
@@ -310,10 +320,13 @@ def run(name, body):
         if not t.zero():
             return
         started = True
-        print('\n測試流程中止' if body(t) is False else '\n測試流程跑完')
+        outcome = '中止' if body(t) is False else '跑完'
+        print(f'\n測試流程{outcome}')
     except KeyboardInterrupt:
+        outcome = 'Ctrl-C 中止'
         print('\nCtrl-C，中止')
     except RuntimeError as e:
+        outcome = f'出錯：{e}'
         print(f'\n{e}')
     finally:
         if started:
@@ -323,7 +336,8 @@ def run(name, body):
             for line in t.report:
                 print('  ' + line)
         print(f'記錄在 {log_path}')
-        time.sleep(0.3)     # 讓最後幾筆指令送出去
+        mark(f'{run_name} 結束：{outcome}')
+        time.sleep(0.3)     # 讓最後幾筆指令、結束的標記送出去
         executor.shutdown()
         t.f.close()
         rclpy.shutdown()

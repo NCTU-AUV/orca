@@ -7,7 +7,11 @@
   Enter 解鎖、空白鍵 上鎖
   Z 歸零（只在上鎖時；以當下深度、航向為 0）
   H 定深開關：開啟時目標 = 目前深度，按住 R/F 以 TARGET_RATE 移動目標（heave 不出力）
+  M 插標記（內容是編號 #1、#2…，錄進 rosbag 的 /session/marker，實機也寫進場次的 markers.csv）
   - / = 調整 GAIN、Ctrl+Q 或關閉視窗 結束
+
+紀錄：指令（/auv_control）、模式切換、解鎖、歸零、定深、GAIN 的變化（/rosout）都由 recorder 錄進 rosbag，
+這個程式自己不寫檔。開始（連上 mavros 與 adapter）和結束也各插一筆標記。
 
 安全：
 - /auv_control 由主迴圈直接發（20 Hz），不用 ROS timer。畫面卡住發送就停，
@@ -38,6 +42,7 @@ from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from orca_msgs.msg import AuvControl
+from orca_session.session import Marker
 
 RATE_HZ = 20
 GAIN_STEP, GAIN_MIN, GAIN_MAX = 0.1, 0.1, 1.0
@@ -77,6 +82,10 @@ class Teleop(Node):
         self.message = ''
 
         self.pub = self.create_publisher(AuvControl, '/auv_control', 10)
+        # 標記在主迴圈裡發，不等訂閱者（等了畫面會卡、/auv_control 會斷）。publisher 一開始就建好，
+        # 到第一次發標記時 recorder 早就訂閱上了
+        self.marker = Marker(self, 'keyboard')
+        self.marks = 0
         self.zero_client = self.create_client(Trigger, '/auv_adapter/zero')
         self.create_subscription(State, '/mavros/state',
                                  lambda m: setattr(self, 'state', m), qos_profile_sensor_data)
@@ -228,7 +237,7 @@ class Screen:
         y += 10
         for row in ('1 MANUAL   2 STABILIZE   3 DEPTH_HOLD',
                     'ENTER arm   SPACE disarm   Z zero (disarmed only)',
-                    'H depth hold on/off   - / = gain   Ctrl+Q quit'):
+                    'H depth hold on/off   M mark   - / = gain   Ctrl+Q quit'):
             self.text(row, 16, y, DIM)
             y += 22
         y += 4
@@ -301,10 +310,16 @@ def handle_key(e, t, ui, max_depth):
             ui.hold = True
             ui.target = min(max(t.depth(), 0.0), max_depth)
             t.say(f'depth hold ON, target {ui.target:.3f} m')
+    elif k == pygame.K_m:
+        t.marks += 1
+        t.marker(f'#{t.marks}')            # 會寫進 log，畫面上的訊息另外設，不重複寫
+        t.message = f'mark #{t.marks}'
     elif k in (pygame.K_MINUS, pygame.K_KP_MINUS):
         ui.gain = round(max(GAIN_MIN, ui.gain - GAIN_STEP), 2)
+        t.say(f'gain {ui.gain:.2f}')
     elif k in (pygame.K_EQUALS, pygame.K_PLUS, pygame.K_KP_PLUS):
         ui.gain = round(min(GAIN_MAX, ui.gain + GAIN_STEP), 2)
+        t.say(f'gain {ui.gain:.2f}')
     return True
 
 
@@ -336,7 +351,8 @@ def step(t, ui, max_depth):
         # 沿用飛控目前的模式，啟動 teleop 本身不切模式
         ui.mode = FC_MODE.get(t.state.mode, M.MODE_MANUAL)
         ui.started = True
-        t.say(f'connected, mode {MODE_FC[ui.mode]}')
+        t.marker(f'開始，模式 {MODE_FC[ui.mode]}，GAIN {ui.gain:.2f}')
+        t.message = f'connected, mode {MODE_FC[ui.mode]}'
 
     surge, sway, heave, yaw = ui.efforts
     t.pub.publish(AuvControl(
@@ -404,6 +420,8 @@ def main():
         pygame.display.quit()
         if ui.started:
             finish(t)
+            t.marker(f'結束，共 {t.marks} 個 M 標記')
+            time.sleep(0.3)     # 讓結束的標記送出去
         executor.shutdown()
         rclpy.shutdown()
 

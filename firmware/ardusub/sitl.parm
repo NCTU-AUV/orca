@@ -78,6 +78,10 @@ PSC_D_ACC_IMAX  0.1
 PSC_D_ACC_FLTE  20
 PSC_D_JERK      50
 
+# ---- EKF ----
+# 深度計的量測雜訊，同實機。SITL 自帶的預設已經是 0.1（ArduSub 程式預設 2.0），寫死是為了不受 SITL 預設改動影響
+EK3_ALT_M_NSE   0.1
+
 # ---- Failsafe ----
 FS_PILOT_INPUT    2
 FS_PILOT_TIMEOUT  3
@@ -86,6 +90,20 @@ FS_GCS_TIMEOUT    5
 
 # ---- 地面站 ----
 MAV_GCS_SYSID   255
+
+# ---- 遙測與紀錄（同實機，mavros 收到的頻率、.BIN 的內容才一致）----
+# mavproxy 接在 SERIAL0（MAV1），每 15 秒送一次 REQUEST_DATA_STREAM 要 4 Hz；MAV1_OPTIONS 4 讓飛控忽略它，
+# 頻率只由下面的參數決定（開機時套用）
+MAV1_RAW_SENS   20
+MAV1_EXT_STAT   20
+MAV1_RC_CHAN    20
+MAV1_POSITION   20
+MAV1_EXTRA1     20
+MAV1_EXTRA2     20
+MAV1_EXTRA3     20
+MAV1_OPTIONS    4
+LOG_BITMASK     176127
+LOG_FILE_DSRMROT 1
 
 # ---- SITL 模擬硬體（不是飛控參數）----
 # 實機船上沒有 GPS（水下也收不到），關掉 SITL 模擬的 GPS，EKF 才與實機一樣沒有水平位置

@@ -41,14 +41,16 @@ scp mavproxy-udpin.sh rpi: && ssh -t rpi sudo bash mavproxy-udpin.sh   # mavprox
 
 # 筆電端（在 deploy/laptop/ 執行）
 ../../ml/rfdetr/fetch_weights.sh            # 第一次：下載偵測模型權重
-./up.sh                                     # 起 front_camera、object_detector、fc_adapter 並等就緒；映像不存在或過期才 build，已經在跑的不重開
+./up.sh                                     # 開場次（或沿用）、起服務、開始全程錄影並等就緒；映像不存在或過期才 build，已經在跑的不重開
 ./up.sh --build                             # 不管指紋，全部重 build（過期的判斷見 docker/build-hash.sh）
 ./mission.sh                                # 接著開始過門（會先跑 ./up.sh）
-docker compose up -d                        # 同 ./up.sh 起的服務，但不等就緒，映像有變會重開
-docker compose up -d front_camera object_detector   # 只跑影像與偵測（飛控沒接時）
+./pool_test.sh water_depth                  # 水池測試腳本（見下面的「功能」）
+./mark.sh <內容>                            # 插一筆標記（錄進 rosbag 和場次的 markers.csv）
+./slice.sh --match <文字>                   # 從場次的 rosbag 切出一段，例如一次任務
+docker compose up -d front_camera object_detector   # 只跑影像與偵測（飛控沒接時；不開場次、不錄）
 docker compose logs -f object_detector      # 每 5 秒印 fps 與延遲
 docker compose exec fc_adapter bash -ic 'ros2 topic echo --once /mavros/state'   # 上岸檢查飛控，要看到 connected: true
-docker compose down                         # 全部關掉
+./down.sh                                   # 收工：場次收尾再全部關掉（不要直接 docker compose down）
 ```
 
 **模擬**
@@ -70,23 +72,19 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 | 功能 | 指令 | 說明 |
 |---|---|---|
 | 過門 | `./mission.sh` | 起服務、等飛控與偵測就緒（實機是 `./up.sh`：映像不存在或過期才 build，已經在跑的容器不重開），再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh gate_pass_yaw` 是下潛後先轉 yaw 對準門、再鎖航向的版本（[`gate_pass_yaw.yaml`](src/orca_mission/trees/gate_pass_yaw.yaml)，流程圖 [gate_pass_yaw.md](src/orca_mission/trees/gate_pass_yaw.md)）；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
-| 水池測試：定深 | `docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'` | 預設 0.15 → 0.20 → 0.10 m。要改就把深度接在後面，例如 `water_depth.py 0.1 0.2` |
-| 水池測試：定向 | 同上，檔名換成 `water_heading.py` | 定深 0.15 m，預設 90 → 0 → −90 → 0°。要改就把角度接在後面，例如 `water_heading.py 45 0` |
-| 水池測試：小任務 | 同上，檔名換成 `water_mission.py` | 下潛 → 直走 → 轉 180° → 走回來 |
+| 水池測試：定深 | 實機 `./pool_test.sh water_depth`；模擬 `docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'` | 預設 0.15 → 0.20 → 0.10 m。要改就把深度接在後面，例如 `./pool_test.sh water_depth 0.1 0.2` |
+| 水池測試：定向 | 同上，腳本換成 `water_heading` | 定深 0.15 m，預設 90 → 0 → −90 → 0°。要改就把角度接在後面，例如 `./pool_test.sh water_heading 45 0` |
+| 水池測試：小任務 | 同上，腳本換成 `water_mission` | 下潛 → 直走 → 轉 180° → 走回來 |
 | 鍵盤操控 | `docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py` | pygame 視窗，按鍵與安全機制見 [`keyboard.py`](tools/teleop/keyboard.py) 檔頭。可加 `--gain 0.3`（初始推力）、`--max-depth 0.25`（定深上限） |
 | 看相機畫面（只限實機） | `docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera/camera/color/image_raw` | 原始影像。topic 換成 `/detections/image` 是畫好偵測框的畫面，視窗左上的下拉選單也能切換 |
 | 行為樹測試 | `cd src/orca_mission && python3 -m pytest test` | 要有 py_trees（或在 `mission` 容器裡跑）。含用簡化模型跑完整過門的情境，CI 也會跑 |
 
 - 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh` 已經跑過。
 - 測試腳本和過門都會先列檢查清單、歸零（以浮在水面時的深度與航向為 0）。任何時候 Ctrl-C 都會上鎖，船浮上來。
-- 紀錄存在 `deploy/<跑法>/logs/` 底下（`<跑法>` 是 `laptop` 或 `sim`），完整列表見 [docs/laptop-rpi-relay.md](docs/laptop-rpi-relay.md#紀錄csvrosbag)（實機）、[docs/sim/README.md](docs/sim/README.md#log)（模擬）：
-
-  | 路徑 | 內容 |
-  |---|---|
-  | `logs/mission/<樹>_<時間>.csv` | 行為樹（`./mission.sh`） |
-  | `logs/bag/<樹>_<時間>/` | rosbag（`./mission.sh`），跟 CSV 同名 |
-  | `logs/fc_adapter/*.csv` | 水池測試腳本 |
-- rosbag 只在跑行為樹時錄：實機和模擬的 `./mission.sh` 都是樹開始前開始錄，樹結束（含 Ctrl-C）、上鎖、船浮上水面後自動停止並收尾（最多等 30 秒），一次任務一個 `.mcap`，存在 `deploy/<跑法>/logs/bag/<樹>_<時間>/`，跟 `logs/mission/` 的 CSV 同名。內容是所有 topic（mavros、`/auv_control`、`/detections`、`/mission/status`、`/rosout` 的節點 log），實機約 4 GB／小時。影像只錄畫好框的 JPEG（`/detections/image/compressed`），相機的影像（原始、JPEG）都不錄。`docker compose up -d`、`./up.sh`、水池測試腳本都不錄；不想錄用 `RECORD=0 ./mission.sh`。mission 結束後不到 1 秒就收尾好，接著就能用 Foxglove 開 `.mcap`（還在寫的檔打不開），或 `docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>` 回放（先 `docker compose down`）。
+- 紀錄存在 `deploy/<跑法>/logs/` 底下（`<跑法>` 是 `laptop` 或 `sim`）。實機和模擬目前的錄法不同：
+  - **實機**以場次為單位：一次下水（`./up.sh` 到 `./down.sh`）的全部紀錄都在 `logs/session/<場次>/`，包括全程 rosbag（每 5 分鐘一個 `.mcap`，含相機的原始 JPEG，估計約 9 GB／小時）、標記 `markers.csv`、行為樹和水池測試的 CSV、開始與結束時的飛控參數、程式版本、各容器的終端輸出。標記來自 `./mark.sh`、鍵盤操控的 M 鍵、行為樹與水池測試的開始和結束；只要其中一段就用 `./slice.sh` 切出來。詳見 [docs/laptop-rpi-relay.md](docs/laptop-rpi-relay.md#紀錄)。
+  - **模擬**只在跑行為樹時錄：`./mission.sh` 樹開始前開始錄，樹結束（含 Ctrl-C）、上鎖、船浮上水面後自動停止並收尾（最多等 30 秒），一次任務一個 `.mcap`，存在 `logs/bag/<樹>_<時間>/`，跟 `logs/mission/` 的 CSV 同名；水池測試的 CSV 在 `logs/fc_adapter/`。影像只錄畫好框的 JPEG。不想錄用 `RECORD=0 ./mission.sh`。詳見 [docs/sim/README.md](docs/sim/README.md#log)。
+  - 用 Foxglove 開 `.mcap`（還在寫的檔可能打不開或缺最後幾秒）。
 
 ### 其他
 
@@ -107,11 +105,12 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 | `src/orca_cam_bridge/` | 接收 RPi 轉出的相機影像，發布成跟 `realsense2_camera` 一樣的 topic（只有 RPi 轉接時用） |
 | `src/orca_perception/` | 物件偵測節點（RF-DETR），前視、底部相機共用一個模型 |
 | `src/orca_mission/` | 行為樹決策層：任務流程寫在 `trees/*.yaml`（旁邊有產生出來的流程圖 `.md`），見 [README](src/orca_mission/README.md) |
+| `src/orca_session/` | 場次紀錄的共用部分：紀錄放哪裡、標記（`/session/marker`、`markers.csv`）、飛控參數快照、rosbag 切片。實機的 `deploy/laptop/*.sh` 透過 [`deploy/common.sh`](deploy/common.sh) 使用 |
 | `sim/` | Gazebo 世界與模型、SITL 啟動腳本 |
 | `firmware/ardusub/` | 飛控參數：實機快照、SITL |
 | `ml/` | 模型訓練的 notebook、設定、下載權重的腳本。權重放在 GitHub Releases，資料集不放進 repo |
 | `docker/` | 各 image 的 Dockerfile |
-| `deploy/` | 每種跑法一個資料夾：compose 與機器上的服務設定 |
+| `deploy/` | 每種跑法一個資料夾：compose 與機器上的服務設定。`deploy/common.sh` 是各跑法的腳本共用的函式（等待就緒、場次） |
 | `tools/` | 水池測試腳本、鍵盤操控（`teleop/keyboard.py`）等不屬於 ROS package 的工具 |
 | `docs/` | 架構、操作、排錯紀錄 |
 
