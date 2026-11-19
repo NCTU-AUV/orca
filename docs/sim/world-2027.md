@@ -58,13 +58,42 @@ UNDERWATER=0 ./mission.sh                   # 關掉水下效果（A/B 比較）
 | Surfacing Square | (11.0, 8.5) | 貼著資格賽區那一側的邊界 |
 | 資格賽門 | (10, 2.6)、(10, 12.0)、(10, 22.6)，起點標記在對應的 (0, y) | 三條道並排在 x = 0～10 |
 
-比賽會隨機的東西都在 `sauvc_final.sdf` 裡標了「隨機」，改那幾行就好：
+上表是**固定佈局**（`sauvc_final.sdf` 本身，不設 `SEED` 時用的就是它；驗收的數字都是它）。比賽會隨機的東西有兩種改法：用下面的[隨機佈局](#隨機佈局)，或直接改 `sauvc_final.sdf` 裡標了「隨機」的那幾行：
 
 - **導航門的位置**：`model://gate` 的 x（沿 y = 12 的線移動）。
 - **橘色 flare 的位置**：`model://orange_flare` 的 x、y（y 在 4～8）。
 - **三支 flare 的位置**：`model://flare_*` 的 x、y。
 - **哪個 drum 是藍的、pinger 在哪個紅 drum**：`drum_1`～`drum_4` 四個位置固定，換 `<uri>`（`drum_blue`、`drum_red_pinger`、`drum_red`）。裁判用 uri 決定分數。
 - **flare 的指定順序**：`<orca:referee mode="final" flare_order="red blue yellow"/>`。
+
+### 隨機佈局
+
+規則上門、橘色 flare、drum 的顏色與 pinger、flare 的順序在每次 attempt 之間都可能不同。模擬每跑一次 `./mission.sh` 就重開一次 Gazebo（等於一次 attempt），所以設 `SEED` 就在開模擬時照規則抽一個佈局：
+
+```bash
+SEED=7 WORLD=sauvc_final.sdf ./mission.sh gate_pass_yaw -p depth=1.0    # 固定用 seed 7 的佈局（同一個 seed 每次都一樣）
+SEED=random WORLD=sauvc_final.sdf ./mission.sh gate_pass_yaw -p depth=1.0   # 隨機挑一個 seed（會印出來，之後用它重現）
+SEED=7 WORLD=sauvc_final.sdf GUI=1 ./run.sh          # 只起模擬看看這個佈局
+SEED=7 ./referee_check.sh sauvc_final.sdf            # 在這個佈局上跑事件的驗收
+SEED=7 ./detect_sweep.sh                             # 在這個佈局上做偵測驗證
+python3 tools/sim/layout.py sauvc_final.sdf --seed 7 # 只產生世界檔、看佈局，不開模擬
+```
+
+- 不設 `SEED` 就是上表的固定佈局，跟以前一樣。目前只有決賽主場地有隨機佈局，其他世界設了 `SEED` 會報錯。
+- [`tools/sim/layout.py`](../../tools/sim/layout.py) 以 `sauvc_final.sdf` 為範本，只改下表那幾項，產生 `sim/worlds/generated/sauvc_final_seed<N>.sdf`（不進 git）與旁邊的 `.layout.json`（這次佈局的真值，arena 座標）。裁判會把真值寫進那次紀錄（`logs/referee/` 第一則 `reset` 事件的 `layout`），所以事後查得到 seed 與佈局。
+- 只隨機規則明說會變的（2026-11-19 決定）：
+
+| 項目 | 怎麼抽 | 規則 |
+|---|---|---|
+| 導航門 | 沿 y = 12 m 的線，x 在 23.5～48.5（門柱離主場地邊界至少 0.7 m） | §9.1：平行池邊、距起始區約 12 m 的線上任意位置 |
+| 橘色 flare | x 在 22.5～49.5、y 在 4～8 m | §9.1：門之前、離場地側邊 4–8 m 的矩形區 |
+| 紅／黃／藍 flare | x 在 22.5～49.5、y 在 14.4～19.3 m，彼此至少隔 2 m | 場地圖的帶狀區。§9.4 的文字是「主場地內任意位置」，先照圖 |
+| drum | 四個位置不動，哪個是藍的、pinger 在哪個紅的隨機 | §9.2 |
+| flare 的順序 | 紅黃藍的排列 | §9.4；過門之後才告知，見[事件與計分](#事件與計分)的 `/comms/flare_order` |
+
+起始區、綠墊、Surfacing Square、資格賽道、船的出發位置不隨機。道具的方向、浮框漂移、船放進起始區的誤差這類「小擾動」目前沒有做。
+
+驗證（2026-11-19）：`sim/tests/test_layout.py` 500 個 seed 都守規則；`SEED=7 ./referee_check.sh sauvc_final.sdf` 34／34（順序 Y-B-R、第 3 個 drum 是普通紅的）。`gate_pass_yaw -p depth=1.0` 在 seed 7（門在起始區左前方，轉 −20.5° 對準）和 seed 68718（門在右前方，轉 +16.1°）都穿過導航門、沒碰到，過門時 `/comms/flare_order` 發布了 Y-B-R／R-B-Y。
 
 ## 事件與計分
 
@@ -75,8 +104,9 @@ UNDERWATER=0 ./mission.sh                   # 關掉水下效果（A/B 比較）
 | `/sim/referee/events` | `std_msgs/String`（JSON） | 一個事件一則，latched（晚訂閱也拿得到之前的）。也寫進 `logs/referee/<名稱>.jsonl` |
 | `/sim/referee/state` | `std_msgs/String`（JSON） | 2 Hz 的現況：分數、正在碰什麼、碰池底／池壁幾次幾秒、過門了沒、掉了哪些球… |
 | `/sim/referee/reset` | `std_msgs/Empty` | 重新開始計分（模擬重開時也會自動重來） |
+| `/comms/flare_order` | `std_msgs/String`（latched） | 決賽時船第一次穿過導航門就發布這次的 flare 順序，例如 `R-B-Y`（空字串 = 還沒告知）。扮演「Game Master 告訴隊伍、隊伍用通訊設備傳給 AUV」，**任務可以訂閱這一個**。名稱與型別是暫定的，實機的通訊方式定了改 `sim/referee.py` 的 `FLARE_ORDER_TOPIC` |
 
-**這些 topic 只有模擬有，任務程式不要訂閱**（等於偷看答案）。用途是驗證模擬與事後看紀錄；rosbag 會錄到。
+**`/sim/*` 只有模擬有，任務程式不要訂閱**（等於偷看答案）。用途是驗證模擬與事後看紀錄；rosbag 會錄到。
 
 ```bash
 docker compose exec sim_referee bash -ic 'ros2 topic echo /sim/referee/events'
@@ -88,6 +118,7 @@ docker compose exec sim_referee bash -ic 'ros2 topic echo /sim/referee/events'
 |---|---|---|
 | `flare_ball_dropped` | 紅／黃／藍 flare 的球掉下來，+20（過門前不算分） | 球離開球座 5 cm 以上。附 `colour`、`order`、`touched`（船有沒有碰到 flare）、`vehicle_distance` |
 | `flare_order_bonus` | 三支都掉了、順序跟 `flare_order` 一樣，+60 | 第三支掉的時候判斷 |
+| `flare_order_announced` | 告知 flare 的順序（不計分） | 第一次穿過導航門時，同時發布 `/comms/flare_order` |
 | `abort`（`reason: orange_flare`） | 碰到橘色 flare，立即 abort | 船的任何部位碰到它 |
 | `penalty_gate` | 碰到導航門，−2（每一次） | 0.5 秒內的斷續接觸算同一次 |
 | `penalty_floor_wall` | 碰到池底或池壁，−5（每一次） | 同上；碰池底的常常是掛在船底的球，球還吸在船上時算船的 |

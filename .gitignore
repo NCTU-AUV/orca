@@ -12,3 +12,5 @@ ml/*/weights/
 __pycache__/
 *.pyc
 .venv/
+# tools/sim/layout.py 產生的隨機佈局（SEED=… 跑腳本時產生）
+sim/worlds/generated/
