@@ -3,18 +3,24 @@
 #   飛控：RPi mavproxy（UDP 14560，udpin）↔ fc_adapter 裡的 mavros
 # 兩條連線都由筆電主動發起，筆電不用開防火牆。所有節點在同一台，ROS_LOCALHOST_ONLY=1，DDS 不出網路。
 #
-#   ./up.sh                                       # 起 front_camera、object_detector、fc_adapter，等就緒；映像不存在或過期才 build，已經在跑的不重開
-#   docker compose up -d                          # 同上三個服務（不等就緒）；recorder、mission 不會起
-#   ./mission.sh                                  # 過門（行為樹，mission 服務，會先跑 ./up.sh），跑樹時才錄 rosbag；解鎖前會等你按 Enter
-#   docker compose up -d front_camera object_detector   # 只跑影像（飛控沒接時）
+#   ./up.sh                                       # 開場次（或沿用）、起服務、開始全程錄影，等就緒；映像不存在或過期才 build，已經在跑的不重開
+#   ./mission.sh                                  # 過門（行為樹，mission 服務，會先跑 ./up.sh）；解鎖前會等你按 Enter
+#   ./pool_test.sh water_depth                    # 水池測試腳本
+#   ./mark.sh <內容>                              # 插一筆標記
+#   ./down.sh                                     # 收工：場次收尾（停錄影、存終端輸出、參數快照）再關掉全部。不要直接 docker compose down
+#   docker compose up -d front_camera object_detector   # 只跑影像（飛控沒接時，不開場次、不錄）
 #
 # 服務：
 #   front_camera     接 RPi 轉出的 D435i 影像 → /camera/camera/color/*（topic 同 realsense2_camera）
 #   object_detector  RF-DETR：影像 → /detections
 #   fc_adapter       飛控介面：mavros + auv_adapter（/auv_control → ArduSub）。程式不改
-#   recorder         所有 topic 錄成 rosbag（MCAP），只在 ./mission.sh 跑行為樹時錄
+#   recorder         全程把所有 topic 錄成 rosbag（MCAP），錄進目前場次
+#   marker_log       把標記（/session/marker）寫進目前場次的 markers.csv
 #   mission          行為樹決策層（orca_mission）：/detections + mavros 狀態 → /auv_control
-#   gui_tools        rqt、鍵盤操控、回放 rosbag 等臨時工具
+#   gui_tools        rqt、鍵盤操控、回放與切片 rosbag 等臨時工具
+# 紀錄：logs/session/<場次>/，目前場次的名稱在 logs/session/current。目錄結構見 deploy/common.sh 檔頭，
+# 用法見 docs/laptop-rpi-relay.md 的「紀錄」。容器都掛整個 logs/session/（/sessions），程式寫檔時才讀 current：
+# 容器的 volume 在建立時就固定了，fc_adapter 這種常駐的容器會跨場次。
 # 底部相機：RPi 轉接還沒有底部相機那一路；接上之後發 /bottom_camera/image_raw、camera_info
 #（frame_id bottom_camera_optical_frame），object_detector、mission 不用改。
 name: orca
@@ -67,8 +73,9 @@ services:
       - torch-cache:/root/.cache       # rfdetr／torch 下載的檔案，避免每次重抓
     command: [ros2, run, orca_perception, detector]
 
-  # mavros + auv_adapter（/auv_control）。水池測試腳本在這裡面跑：
-  #   docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
+  # mavros + auv_adapter（/auv_control）。水池測試腳本在這裡面跑（./pool_test.sh），
+  # CSV 寫到目前場次的 pool_tests/；飛控參數快照（up.sh、down.sh）也在這裡面讀。
+  # 沒有場次時 CSV 寫到 logs/no_session/（正常不會發生，只是避免寫進容器裡就消失）。
   # 第一次用之前，RPi 的 mavproxy 要先加 udpin 14560（deploy/rpi-relay/mavproxy-udpin.sh）
   fc_adapter:
     <<: [*ros, *base]
@@ -76,42 +83,53 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
-      - ./logs/fc_adapter:/logs
+      - ./logs/session:/sessions
+      - ./logs/no_session:/logs
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, rpi_relay]
 
-  # 把所有 topic 錄成 rosbag（MCAP），只在跑行為樹時錄：./mission.sh 跑樹前開、樹結束（含 Ctrl-C）且船浮上水面後停，
-  # 一次任務一個資料夾、一個 .mcap：logs/bag/<樹>_<時間>/，跟 logs/mission/<樹>_<時間>.csv 同名（RECORD=0 ./mission.sh 不錄）。
-  # 在 record profile，docker compose up -d、./up.sh 不會起它。
-  # 單獨錄（不經 mission.sh）：BAG_NAME=名稱 docker compose --profile record up -d recorder；
-  # 停止用 docker compose --profile record stop recorder（送 SIGINT，讓它把檔案收尾）。
-  # 不設 restart：重開會沿用同一個 BAG_NAME，資料夾已存在，ros2 bag record 會直接失敗。
-  # 影像只錄畫好框的 JPEG（object_detector 發的 /detections/image/compressed、/detections/bottom_image/compressed），
-  # 約 4 GB／小時（實測前視 26 fps、每秒約 1.1 MB）。相機的影像都不錄：原始影像太大（約 100 GB／小時），
-  # front_camera 轉發的原始 JPEG（.../image_raw/compressed，每秒約 1.3 MB）也不錄；要錄就把它從 -x 拿掉。
+  # 全程錄影：所有 topic 錄成 rosbag（MCAP），錄進目前場次（讀 /sessions/current）。
+  # 每次啟動開一個新資料夾 <場次>/bag_<時間>/，每 5 分鐘切一個 .mcap（斷電也只會壞最後一個檔），
+  # 所以出錯結束後可以直接重開（restart）。跟其他服務一起由 ./up.sh 起；還沒有場次時（沒經 up.sh）會一直等。
+  # 停止用 docker compose stop recorder（送 SIGINT，讓它把檔案收尾）；./down.sh 會做。
+  # 不錄：未壓縮的影像（sensor_msgs/Image，約 100 GB／小時）。
+  # 錄：front_camera 轉發的原始 JPEG（/camera/camera/color/image_raw/compressed，RPi 送來的、不重新壓縮，
+  # 每秒約 1.3 MB）、object_detector 畫好框的 JPEG（/detections/image/compressed，每秒約 1.1 MB），
+  # 加上 mavros、/auv_control、/detections、/rosout、/session/marker 等，合計約 9 GB／小時。
   recorder:
     <<: [*ros, *base]
-    profiles: [record]
+    restart: unless-stopped
     stop_signal: SIGINT
     stop_grace_period: 15s
-    environment:
-      <<: *ros-env
-      BAG_NAME: ${BAG_NAME:-}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./logs/bag:/bags
+      - ./logs/session:/sessions
     command:
       - bash
       - -c
       - >-
-        exec ros2 bag record -a -s mcap
-        -x '^(/camera/camera/color/image_raw.*|/bottom_camera/image_raw.*|/detections/image|/detections/bottom_image)$$'
-        -o /bags/$${BAG_NAME:-$$(date +%Y%m%d_%H%M%S)}
+        until s=$$(cat /sessions/current 2>/dev/null) && [ -n "$$s" ]; do
+        echo '還沒有場次（logs/session/current），等 ./up.sh 建立'; sleep 5; done;
+        exec ros2 bag record -a -s mcap --max-bag-duration 300
+        -x '^(/camera/camera/color/image_raw|/bottom_camera/image_raw|/detections/image|/detections/bottom_image)$$'
+        -o "/sessions/$$s/bag_$$(date +%Y%m%d_%H%M%S)"
+
+  # 標記（/session/marker，std_msgs/String「來源: 內容」）附加到目前場次的 markers.csv。
+  # 標記的來源：./mark.sh、鍵盤操控的 M 鍵、行為樹與水池測試腳本開始和結束、up.sh／down.sh
+  marker_log:
+    <<: [*ros, *base]
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ./logs/session:/sessions
+    command: [ros2, run, orca_session, marker_log]
 
   # 行為樹決策層。不隨 up 啟動，用 ./mission.sh 或（要互動，列檢查清單、等 Enter）：
   #   docker compose --profile mission run --rm mission mission gate_pass
   # 即時看樹的狀態（另開終端機）：
   #   docker compose --profile mission run --rm mission py-trees-tree-watcher
+  # CSV 寫到目前場次的 mission/。ORCA_GIT（程式版本，寫進開始的標記）由 mission.sh 傳進來
   mission:
     <<: *ros
     image: orca-mission
@@ -128,16 +146,18 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
-      - ./logs/mission:/logs
+      - ./logs/session:/sessions
+      - ./logs/no_session:/logs
     stop_grace_period: 10s        # SIGTERM 時 mission 會先送 MANUAL＋DISARM 再結束
     command: [mission, gate_pass]
 
   # 臨時工具，不會隨 up 啟動。看畫面（主機先跑 xhost +SI:localuser:root）：
   #   docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /detections/image
-  # 鍵盤操控：
+  # 鍵盤操控（M 鍵插標記）：
   #   docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
-  # 回放 rosbag（先 docker compose down，避免跟現場的 topic 混在一起）：
-  #   docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>
+  # 從場次切出一段：./slice.sh（在這個服務裡跑 bag_slice）
+  # 回放 rosbag（先 ./down.sh，避免跟現場的 topic 混在一起）：
+  #   docker compose run --rm gui_tools ros2 bag play /sessions/<場次>/slices/<名稱>
   gui_tools:
     <<: [*ros, *base]
     profiles: [tools]
@@ -149,7 +169,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
-      - ./logs/bag:/bags:ro
+      - ./logs/session:/sessions
 
 volumes:
   torch-cache:

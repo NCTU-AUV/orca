@@ -19,9 +19,12 @@
   → MANUAL、全 0、DISARM，等飛控上鎖。adapter 的看門狗在 0.5 秒沒收到指令時只會送中位，
   不切模式、不上鎖，船會停在水裡維持深度。
 - 上鎖之後等船浮上水面（深度 ≤ SURFACE_DEPTH 持續 SURFACE_HOLD_S 秒，最多 SURFACE_TIMEOUT 秒，
-  再按一次 Ctrl-C 跳過）才結束：CSV 和 rosbag（mission.sh 在這個程式結束後才停止錄影）錄到上浮的過程。
+  再按一次 Ctrl-C 跳過）才結束：CSV 和 rosbag 都錄到上浮的過程。
 - 狀態：/mission/status（std_msgs/String，JSON，2 Hz）；py_trees_ros 的樹快照
-  （py-trees-tree-watcher 可以即時看）；CSV 記錄到 /logs/<樹>_<日期_時間>.csv（20 Hz）。
+  （py-trees-tree-watcher 可以即時看）；CSV 記錄到 <樹>_<日期_時間>.csv（20 Hz）：實機在目前場次的
+  mission/（deploy/laptop/logs/session/<場次>/mission/），模擬在容器的 /logs（deploy/sim/logs/mission/）。
+- 標記（/session/marker）：開始時一筆（帶程式版本），結束（上浮後）一筆，內容都有 run 的名稱，
+  實機用 ./slice.sh --match <名稱> 從場次的 rosbag 切出這次任務。
 """
 import argparse
 import csv
@@ -48,6 +51,8 @@ from std_srvs.srv import Trigger
 from vision_msgs.msg import Detection2DArray
 
 from orca_msgs.msg import AuvControl
+from orca_session.session import Marker, git_version
+from orca_session.session import log_dir as session_log_dir
 
 from .bt.behaviours import Context
 from .bt.loader import TreeError, build, find_tree, read
@@ -325,9 +330,9 @@ def main(argv=None):
                     help='覆寫樹的 vars，可以重複')
     ap.add_argument('--no-checklist', action='store_true', help='不列檢查清單、不等 Enter（只在模擬用）')
     ap.add_argument('--config', help='相機與限幅設定（預設 config/orca.yaml）')
-    ap.add_argument('--log-dir', default=os.environ.get('ORCA_LOG_DIR', '/logs'))
-    ap.add_argument('--run-name', help='紀錄檔名（不含 .csv），預設 <樹>_<時間>；'
-                                       'deploy/sim/mission.sh 用它讓 CSV 跟 rosbag 同名')
+    ap.add_argument('--log-dir', help='CSV 的資料夾，預設：環境變數 ORCA_LOG_DIR → 目前場次的 mission/ → /logs')
+    ap.add_argument('--run-name', help='CSV 的檔名（不含 .csv）與標記裡的名稱，預設 <樹>_<時間>；'
+                                       'deploy/*/mission.sh 用它讓 CSV、rosbag、標記同名')
     ap.add_argument('--print-tree', action='store_true', help='只印出樹的結構，不執行')
     args = ap.parse_args(argv if argv is not None else rclpy.utilities.remove_ros_args(sys.argv)[1:])
 
@@ -346,13 +351,16 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, on_signal)
     # 不讓 rclpy 處理 Ctrl-C：它預設會先關掉 ROS，收尾的 DISARM 就送不出去
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
-    os.makedirs(args.log_dir, exist_ok=True)
+    folder = args.log_dir or session_log_dir('mission')
+    os.makedirs(folder, exist_ok=True)
     run_name = args.run_name or time.strftime(f'{spec.get("name", "mission")}_%Y%m%d_%H%M%S')
-    log_path = os.path.join(args.log_dir, f'{run_name}.csv')
+    log_path = os.path.join(folder, f'{run_name}.csv')
     node = MissionNode(spec, cameras, limits, not args.no_checklist, log_path)
     executor = SingleThreadedExecutor()
     executor.add_node(node)
     print(f'行為樹 {path}\n{py_trees.display.unicode_tree(node.tree.root)}\n記錄到 {log_path}', flush=True)
+    mark = Marker(node, 'mission')
+    mark(f'{run_name} 開始（{git_version()}）', wait=1.0)
 
     try:
         while node.done is None:
@@ -386,6 +394,8 @@ def main(argv=None):
                 wait_surface(node, executor)
         print(f'記錄在 {log_path}', flush=True)
         ok = node.done[0]
+        mark(f'{run_name} 結束：{"完成" if ok else "中止"}，{node.done[1]}')
+        time.sleep(0.3)     # 讓結束的標記送出去
         node.f.close()
         node.tree.shutdown()
         executor.shutdown()
