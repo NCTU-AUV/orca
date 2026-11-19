@@ -38,34 +38,25 @@ RPi 上 mavproxy.service 的三個輸出：`udp:127.0.0.1:14570` 給 bcast-relay
 
 ## 筆電端
 
+日常的指令（開工、檢查飛控、過門、鍵盤、看畫面、標記、收工）在 [README 的「實機」](../README.md#實機)。以下是不常用的：
+
 ```bash
-ml/rfdetr/fetch_weights.sh                 # 第一次
 cd deploy/laptop
-./up.sh                                    # 開場次（或沿用）、起服務、開始全程錄影，等飛控、相機、偵測、錄影就緒；映像不存在或過期才 build，已經在跑的不重開
+../../ml/rfdetr/fetch_weights.sh           # 下載偵測模型權重（./up.sh 沒有權重時也會自己下載）
 ./up.sh --build                            # 不管指紋，全部重 build；映像有變的容器重開
-./down.sh                                  # 收工：場次收尾（停錄影、存終端輸出、參數快照、拉飛控 .BIN）再全部關掉。不要直接 docker compose down
 docker compose up -d front_camera object_detector   # 只跑影像與偵測（飛控沒接時；不開場次、不錄）
-docker compose logs -f object_detector             # 每 5 秒印 fps 與延遲
-
-# 看偵測畫面（主機先跑 xhost +SI:localuser:root）
-docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /detections/image
-
-# 水池測試腳本（tools/pool_tests/water_*.py），參數接在後面
-./pool_test.sh water_depth 0.1 0.2
-
-# 鍵盤操控（主機先跑 xhost +SI:localuser:root），M 插標記。按鍵與安全機制見 tools/teleop/keyboard.py 檔頭
-docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
-
-# 過門（行為樹，src/orca_mission/trees/gate_pass.yaml）：先跑 ./up.sh、再跑行為樹（解鎖前會等你按 Enter）
-./mission.sh
-
-# 紀錄：插標記、切出一段（見下面的「紀錄」）
-./mark.sh surge 0.4 第 2 趟
-./slice.sh --match gate_pass_20261120_101500
+docker compose logs -f object_detector     # 每 5 秒印 fps 與延遲
+docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera/camera/color/image_raw   # 相機的原始影像
+./pool_test.sh water_depth                 # 水池測試：定深，預設 0.15 → 0.20 → 0.10 m；深度可以接在後面，例如 water_depth 0.1 0.2
+./pool_test.sh water_heading               # 水池測試：定深 0.15 m，航向 90 → 0 → −90 → 0°；角度可以接在後面，例如 water_heading 45 0
+./pool_test.sh water_mission               # 水池測試：下潛 → 直走 → 轉 180° → 走回來
+./slice.sh --match gate_pass_20261120_101500   # 從場次的 rosbag 切出一次任務（./mission.sh 結束時會印出這行）
 ./fc_logs.sh csv                           # 把這個場次的飛控 .BIN 轉成帶 ROS 時間的 CSV（見「飛控的 DataFlash」）
 ```
 
-上岸檢查飛控連線（不要解鎖）：`docker compose exec fc_adapter bash -ic 'ros2 topic echo --once --qos-durability volatile /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。不加 `--qos-durability volatile` 的話，印出來的可能是幾秒前的舊狀態（見「踩過的坑」）。
+- 水池測試腳本是 `tools/pool_tests/water_*.py`，要先 `./up.sh`。開頭會列檢查清單、歸零（以浮在水面時的深度與航向為 0），CSV 寫進場次資料夾。
+- 鍵盤操控時按 M 插標記。
+- 上岸檢查飛控時（不要解鎖），QGC 也要同時連得上。README 的指令加了 `--qos-durability volatile`，不加的話，印出來的可能是幾秒前的舊狀態（見「踩過的坑」）。
 
 ### 啟動與收工流程（`./up.sh`、`./mission.sh`、`./down.sh`）
 

@@ -1,5 +1,7 @@
 # 重建 Gazebo 世界：SAUVC 2027（需求）
 
+> **已封存**：這份是交給實作者的需求書（2026-11-17），世界已經做完。現況見 [docs/sim/world-2027.md](../sim/world-2027.md)。文中的 `reference/` 是 [`docs/sim/reference/`](../sim/reference/README.md)。
+
 **這份只寫「要達成什麼」，不寫怎麼做。** 模型怎麼切、用哪些 plugin、關節與材質怎麼配、檔案怎麼放、腳本怎麼寫，都由實作者自己判斷，只要滿足下面的需求、通過驗收、不碰紅線。遇到規則沒寫、需求也沒寫的，自己決定並在註解或 PR 說明裡寫明是假設。
 
 ## 目標
@@ -64,7 +66,7 @@
 
 ## 參考圖（照著做，不要憑印象）
 
-官方圖都已經抓進 **[`reference/`](reference/)**，清單與每張圖能看出什麼見 [`reference/README.md`](reference/README.md)。最該先看的兩張：
+官方圖都已經抓進 **[`reference/`](../sim/reference/)**，清單與每張圖能看出什麼見 [`reference/README.md`](../sim/reference/README.md)。最該先看的兩張：
 
 - `reference/arena-2027.png` — 2027 場地的 Top + Side View，所有位置與深度都在這張。
 - `reference/orange-flare-2022.jpg` — 橘色 flare 的水下實拍，看得出它跟紅黃藍那種硬桿是完全不同的東西。

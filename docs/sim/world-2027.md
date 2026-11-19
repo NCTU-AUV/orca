@@ -1,16 +1,8 @@
 # SAUVC 2027 模擬世界
 
-依 **SAUVC 2027 Rulebook 2027.3.2（2026-10-30 更新）** 重建的 Gazebo 世界：資格賽與決賽主場地、像水下的畫面、碰撞與計分事件，以及偵測驗證。需求見 [world-2027-brief.md](world-2027-brief.md)，官方參考圖見 [reference/](reference/README.md)。怎麼跑模擬見 [README.md](README.md)。
+依 **SAUVC 2027 Rulebook 2027.3.2（2026-10-30 更新）** 重建的 Gazebo 世界：資格賽與決賽主場地、像水下的畫面、碰撞與計分事件，以及偵測驗證。需求見 [archive/world-2027-brief.md](../archive/world-2027-brief.md)，官方參考圖見 [reference/](reference/README.md)。
 
-指令都在 `deploy/sim/` 底下執行。
-
-```bash
-./mission.sh                                # 資格賽世界跑過門的行為樹（預設 WORLD=sauvc_qual.sdf）
-WORLD=sauvc_final.sdf GUI=1 ./run.sh        # 只起決賽主場地，開 Gazebo 視窗看
-UNDERWATER=0 ./mission.sh                   # 關掉水下效果（A/B 比較）
-./referee_check.sh                          # 驗收：每一種規則事件都做得出來、讀得到（約 10 分鐘）
-./detect_sweep.sh                           # 偵測驗證：每個道具在多遠偵測得到（約 6 分鐘）
-```
+怎麼跑：日常的指令（跑任務、換世界）在 [README 的「模擬」](../../README.md#模擬)；隨機佈局、水下效果、驗收（`referee_check.sh`）、偵測驗證（`detect_sweep.sh`）的指令在 [docs/sim/README.md](README.md)。
 
 ## 兩個世界
 

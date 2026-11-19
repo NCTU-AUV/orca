@@ -1,12 +1,13 @@
 # 開發過程的特別事項
 
-> 這份是建立模擬時的紀錄（2026-11-10），寫的是搬進 orca repo 之前的檔案配置。對照：
+> M0～M5 是建立模擬時的紀錄（2026-11-10），用的是搬進 orca repo 之前的名稱。對照現在的：
 > `adapter/` → `src/orca_bridge/`（程式、mavros 設定）與 `tools/pool_tests/`（測試腳本）；
 > `sim/params/orca.parm` → `firmware/ardusub/sitl.parm`；`sim/Dockerfile` → `docker/sim.Dockerfile`；
-> `run.sh`、`compose.yaml` → `deploy/sim/`；compose 的 `adapter` 服務 → `bridge`；`logs/adapter/` → `deploy/sim/logs/bridge/`。
+> `run.sh`、`compose.yaml` → `deploy/sim/`；compose 的 `sim` 服務 → `simulator`、`adapter` 服務 → `fc_adapter`；
+> `logs/adapter/` → `deploy/sim/logs/fc_adapter/`；`PLAN.md` → [archive/sim-plan.md](../archive/sim-plan.md)。
 
 
-建置這套模擬（M0～M5，見 [plan.md](plan.md) 的里程碑）時遇到的坑、不直觀的設定，以及排錯的方法。之後要改這套模擬、或發現行為怪怪的時候，先看這裡。
+建置這套模擬（M0～M5，見 [archive/sim-plan.md](../archive/sim-plan.md) 的里程碑）時遇到的坑、不直觀的設定。之後要改這套模擬、或發現行為怪怪的時候，先看這裡。排錯用的指令（船的位姿、推船、讀飛控的 `.BIN`）在 [README.md 的「排錯」](README.md#排錯gazebo-指令)。
 
 每一項的格式：現象 → 原因 → 處理。檔案裡有對應註解的，也標出位置。
 
@@ -32,7 +33,7 @@
 - **MAVProxy 用 `pip install --no-deps` 裝**：只做 MAVLink 轉送，不需要它的地圖、繪圖功能帶進來的 OpenCV、VTK、matplotlib，image 小很多。
 - **推進器方向**：`MOT_n_DIRECTION` 照實機設定（−1, 1, −1, 1, 1, −1, −1, 1）。實機用它補償螺旋槳正反轉與接線，模擬沒有這些差異，所以在外掛的推力倍率乘上相同的正負號抵銷（`models/orca/model.sdf` 的 `<multiplier>`）。這樣 PWM 的意義、測試程式裡的 `VERT_SIGN`、`YAW_SIGN` 都與實機一致。
 - **推力曲線用 T200 的實測表，不是直線**：ArduPilotPlugin 的 COMMAND 只能把 PWM 線性換算，但 T200 有死區（約 1472～1528 µs 推力為 0），小推力遠比線性小；實機的 PWM 又大多只偏離中位幾十 µs，直線會高估好幾倍（實機紀錄的分析見 `tools/sysid/analyze.py`）。所以外掛改送「PWM − 1500」（`<multiplier>` ±800、`<offset>` −0.5）到 `.../cmd_pwm`，自寫的 `orca::ThrustCurve`（`sim/plugins/thrust_curve/`，在 `docker/sim.Dockerfile` 的 build stage 編）查 Blue Robotics 公開的推力表（`models/orca/t200_bollard.csv`，`<voltage>` 16 V，正反轉取平均）後送到 Thruster 的 `.../cmd_thrust`。換成曲線後，鎖航向、定深的誤差小時 PWM 落在死區，收斂變慢：`smoke_test` 轉 90° 從約 4 秒變約 10 秒、過衝約 5°（直線時不到 1°）。實機有同樣的死區。
-- **馬達對應**經 MANUAL 下 12 個方向（前後、左右、上下、左右轉、pitch、roll 各正負）逐一實測確認，表在 PLAN.md。
+- **馬達對應**經 MANUAL 下 12 個方向（前後、左右、上下、左右轉、pitch、roll 各正負）逐一實測確認，表在 [archive/sim-plan.md](../archive/sim-plan.md#馬達對應)。
 - **航向的數值**：船頭朝 Gazebo 的 +x（東）時，飛控報約 77°，不是 90°。沒有 EKF 原點時飛控不做磁偏角補償，報的是磁北航向；差的 13° 是模擬地點的磁偏角。實機一樣沒有原點。
 - **MAVLink 測試的陷阱**（直接用 pymavlink 送指令時）：
   - ArduSub 只收 system id = `MAV_GCS_SYSID`（255）送的 `MANUAL_CONTROL`，其他的被默默丟掉。
@@ -77,35 +78,6 @@
 - **Gazebo 視窗啟動時的 `libEGL warning: egl: failed to create dri2 screen`**：Mesa 嘗試用內顯失敗的訊息。視窗實際跑在 NVIDIA 上（`nvidia-smi` 看得到 `gz sim -g`），可忽略。
 - **乾淨重跑的結果與 M4 一致**：`water_depth.py` 三段 0.8～1.0 s 到達、過衝 0.4～0.8 cm；`water_heading.py` 四段 1.7～1.9 s 到達、過衝 1.4～1.6°。同樣的設定每次跑的結果幾乎相同，可以拿來做回歸測試（改了程式後確認行為沒變）。
 - **確認有沒有測試程式在跑**：`docker compose exec adapter pgrep -af 'python3 /work/water_'`。不要寫成 `bash -c 'pgrep -af water_'`，`pgrep` 會比對到這行指令本身而誤報。
-
-## 排錯方法
-
-以下指令都在 `sim` 容器裡跑（`docker compose exec sim bash`）。
-
-- **船的真實位姿**：`gz model -m orca -p`（位置 m，姿態 RPY rad，Gazebo 世界座標 ENU）。
-- **把船擺到某個位姿**：
-  ```bash
-  gz service -s /world/orca_pool/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean \
-    --timeout 2000 --req 'name: "orca", position: {z: -0.3}'
-  ```
-- **對船施加力矩（模擬被推）**：世界檔沒有載入施力的系統，執行中臨時加：
-  ```bash
-  gz service -s /world/orca_pool/entity/system/add --reqtype gz.msgs.EntityPlugin_V \
-    --reptype gz.msgs.Boolean --timeout 3000 --req 'entity: {id: 1, type: WORLD},
-    plugins: {name: "gz::sim::systems::ApplyLinkWrench", filename: "gz-sim-apply-link-wrench-system"}'
-  # 繞 z 軸逆時針 40 N·m，持續到清除為止
-  gz topic -t /world/orca_pool/wrench/persistent -m gz.msgs.EntityWrench \
-    -p 'entity: {name: "orca::base_link", type: LINK}, wrench: {torque: {z: 40}}'
-  gz topic -t /world/orca_pool/wrench/clear -m gz.msgs.Entity -p 'name: "orca::base_link", type: LINK'
-  ```
-- **看飛控內部（控制器的目標與出力）**：MAVLink 遙測只有 4 Hz，而且沒有控制器的內部值。飛控的 DataFlash log 在 `logs/sim/ardusub/logs/*.BIN`，用 pymavlink 讀：
-  ```python
-  from pymavlink import mavutil
-  f = mavutil.mavlink_connection('/logs/ardusub/logs/00000001.BIN')
-  while (m := f.recv_match(type=['ATT', 'RATE', 'CTUN', 'BARO'])) is not None:
-      print(m)
-  ```
-  常用的訊息：`ATT`（`DesYaw` 目標航向、`Yaw` 實際航向）、`RATE`（`YDes` 目標角速度、`YOut` 控制器出力）、`CTUN`（`DAlt` 目標深度、`Alt` EKF 深度、`BAlt` 深度計）、`BARO`（原始水壓）。PID 各分量（`PIDY` 等）預設不記，要在解鎖前把 `LOG_BITMASK` 加上第 12 位元（4096），只對這次開機有效。
 
 ## SAUVC 2027 世界（2026-11-17）
 

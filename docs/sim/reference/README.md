@@ -1,6 +1,6 @@
 # SAUVC 官方參考圖
 
-重建模擬世界時照著這些圖做，不要憑印象。對應需求見 [../world-2027-brief.md](../world-2027-brief.md)。
+重建模擬世界時照著這些圖做，不要憑印象。對應需求見 [archive/world-2027-brief.md](../../archive/world-2027-brief.md)。
 
 **來源**：SAUVC 2027 Rulebook，版本 2027.3.2（2026-10-30 更新），<http://sauvc.org/rulebook/>，取自該頁的 `img/`。
 **版權**：主辦單位 IEEE OES / The Singapore AUV Challenge 所有，照片上有浮水印。放在這裡只為了隊內建模參考，不要另外散布或改作。

@@ -1,9 +1,11 @@
 # Orca ArduSub SITL + Gazebo 模擬：計畫
 
-> 這份是建立模擬時的紀錄（2026-11-10），寫的是搬進 orca repo 之前的檔案配置。對照：
+> **已封存**：這份是建立模擬時的計畫（2026-11-10），模擬已經做完。現況見 [docs/sim/README.md](../sim/README.md)。
+>
+> 寫的是搬進 orca repo 之前的檔案配置。對照：
 > `adapter/` → `src/orca_bridge/`（程式、mavros 設定）與 `tools/pool_tests/`（測試腳本）；
 > `sim/params/orca.parm` → `firmware/ardusub/sitl.parm`；`sim/Dockerfile` → `docker/sim.Dockerfile`；
-> `run.sh`、`compose.yaml` → `deploy/sim/`；compose 的 `adapter` 服務 → `bridge`；`logs/adapter/` → `deploy/sim/logs/bridge/`。
+> `run.sh`、`compose.yaml` → `deploy/sim/`；compose 的 `sim` 服務 → `simulator`、`adapter` 服務 → `fc_adapter`；`logs/adapter/` → `deploy/sim/logs/fc_adapter/`。
 
 
 ## 目標

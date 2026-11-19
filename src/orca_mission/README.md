@@ -10,16 +10,14 @@
 
 ## 跑
 
-```bash
-deploy/sim/mission.sh                               # 模擬：過門（資格賽門）
-deploy/sim/mission.sh gate_pass_yaw                 # 模擬：過門，下潛後先轉向對準門再鎖航向
-WORLD=orca_pool.sdf deploy/sim/mission.sh smoke_test
-deploy/laptop/up.sh                                 # 實機：起容器、等就緒（映像不存在或過期才 build，已經在跑的不重開）
-deploy/laptop/mission.sh                            # 實機：過門（會先跑 up.sh），解鎖前列檢查清單、等 Enter
-deploy/laptop/mission.sh gate_pass -p depth=0.5 -p pass_s=6    # -p 覆寫樹的 vars
+平常用 `deploy/laptop/mission.sh`、`deploy/sim/mission.sh` 跑，指令見 [README 的「日常指令」](../../README.md#日常指令)，模擬的其他選項（`smoke_test`、隨機佈局等）見 [docs/sim/README.md](../../docs/sim/README.md#跑行為樹missionsh)。兩個腳本都是把參數交給容器裡的 `mission`：
+
+```
+mission <樹> [-p 名稱=值 ...] [--no-checklist] [--print-tree] [--run-name 名稱]
 ```
 
-容器裡直接執行：`mission <樹> [-p 名稱=值 ...] [--no-checklist] [--print-tree]`。
+- `-p` 覆寫樹的 `vars`，例如 `-p depth=0.5 -p pass_s=6`。
+- `--no-checklist`：不列檢查清單、不等 Enter（只在模擬用）。`--print-tree`：只印出樹的結構，不執行。`--run-name`：CSV 的檔名與標記裡的名稱，預設 `<樹>_<時間>`。
 
 無論樹成功或失敗、流程中飛控自己上鎖、程式出錯、Ctrl-C、Ctrl-Z、`docker stop`，都會送 MANUAL、全 0、DISARM，並等飛控上鎖。adapter 的看門狗在 0.5 秒沒收到 `/auv_control` 時只會改送中位，不切模式、不上鎖（ALT_HOLD 下船會停在水裡維持深度），所以上鎖一定要由這裡做。
 
