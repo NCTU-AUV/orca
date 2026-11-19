@@ -23,15 +23,16 @@ deploy/laptop/mission.sh gate_pass -p depth=0.5 -p pass_s=6    # -p 覆寫樹的
 
 無論樹成功或失敗、流程中飛控自己上鎖、程式出錯、Ctrl-C、Ctrl-Z、`docker stop`，都會送 MANUAL、全 0、DISARM，並等飛控上鎖。adapter 的看門狗在 0.5 秒沒收到 `/auv_control` 時只會改送中位，不切模式、不上鎖（ALT_HOLD 下船會停在水裡維持深度），所以上鎖一定要由這裡做。
 
-上鎖之後會等船浮上水面（深度 ≤ 0.05 m 持續 1 秒，最多 30 秒）才結束，CSV 跟著記到上浮的過程；`mission.sh` 在 `mission` 結束後才停止錄 rosbag，所以 bag 也錄到上浮為止。等的時候再按一次 Ctrl-C 就不等；`docker stop` 不等。
+上鎖之後會等船浮上水面（深度 ≤ 0.05 m 持續 1 秒，最多 30 秒）才結束，CSV 跟著記到上浮的過程。rosbag 也錄到上浮為止：模擬的 `mission.sh` 在 `mission` 結束後才停止錄影，實機是全程錄影、結束的標記在上浮之後才發。等的時候再按一次 Ctrl-C 就不等；`docker stop` 不等。
 
 ## 看狀態
 
 - 終端機每 0.5 秒印一行：目前的節點、深度、航向、指令、執行器的回饋。
 - `/mission/status`（`std_msgs/String`，JSON，2 Hz）。
 - 即時看整棵樹每個節點的狀態：`docker compose --profile mission run --rm mission py-trees-tree-watcher`。
-- CSV（20 Hz）：`deploy/<機器>/logs/mission/<樹>_<時間>.csv`（`--run-name` 可以指定檔名）。
-- rosbag（MCAP，Foxglove 直接開）：模擬每次 `deploy/sim/mission.sh` 錄一個，在 `deploy/sim/logs/bag/<樹>_<時間>/`，跟 CSV 同名，影像只有畫好框的 JPEG；實機由 `recorder` 服務錄在 `deploy/laptop/logs/bag/<啟動時間>/`。
+- CSV（20 Hz）：實機在 `deploy/laptop/logs/session/<場次>/mission/<樹>_<時間>.csv`，模擬在 `deploy/sim/logs/mission/<樹>_<時間>.csv`（`--run-name` 可以指定檔名）。
+- 標記（`/session/marker`）：開始時一筆，帶程式版本（`ORCA_GIT`，`mission.sh` 傳進來）；結束（上浮後）一筆，帶結果。兩筆都含 run 的名稱。
+- rosbag（MCAP，Foxglove 直接開）：模擬每次 `deploy/sim/mission.sh` 錄一個，在 `deploy/sim/logs/bag/<樹>_<時間>/`，跟 CSV 同名，影像只有畫好框的 JPEG；實機是場次的全程錄影，用 `./slice.sh --match <樹>_<時間>` 切出這次任務（見 [docs/laptop-rpi-relay.md](../../docs/laptop-rpi-relay.md#紀錄)）。
 
 ## 架構
 
