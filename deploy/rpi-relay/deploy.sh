@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# 在筆電執行：把 cam_relay 部署到 RPi，並改成開機自動跑 cam-relay（取代 realsense-web）。
+# 在筆電執行：把 cam_relay 部署到 RPi，並改成開機自動跑 cam-relay（取代 realsense-web）；
+# 順便放上拉飛控 .BIN 用的 fc_logs.py（~/workspace/fc-logs/，用 mavproxy-venv 的 pymavlink）。
 # 不需要 sudo。venv 已存在就不重建。
 #
-#   ./deploy.sh           部署並啟用 cam-relay
+#   ./deploy.sh           部署 fc_logs.py，並部署、啟用 cam-relay
+#   ./deploy.sh fc-logs   只部署 fc_logs.py（不動 cam-relay）
 #   ./deploy.sh revert    改回開機跑 realsense-web
 set -euo pipefail
 HOST=${RPI_HOST:-rpi}
@@ -10,6 +12,13 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ "${1:-}" = revert ]; then
   ssh "$HOST" 'systemctl --user disable --now cam-relay.service; systemctl --user enable --now realsense-web.service'
+  exit 0
+fi
+
+ssh "$HOST" 'mkdir -p ~/workspace/fc-logs'
+scp -q "$DIR/fc_logs.py" "$HOST:workspace/fc-logs/"
+if [ "${1:-}" = fc-logs ]; then
+  ssh "$HOST" '~/mavproxy-venv/bin/python -c "import pymavlink.mavftp" && echo "fc_logs.py 已部署"'
   exit 0
 fi
 

@@ -7,10 +7,12 @@
 #   ./up.sh --build    # 不管指紋，全部重 build（有 Docker 快取，沒改的部分很快）
 #
 # 場次（一次下水的全部紀錄，logs/session/<場次>/，結構見 deploy/common.sh）：
-# - 沒有場次 → 開新場次：記開始時間、程式版本（git），起服務後拍飛控參數快照、插「場次開始」標記。
+# - 沒有場次 → 開新場次：記開始時間、程式版本（git），起服務後拍飛控參數快照、記下飛控 SD 卡上
+#   已有的 .BIN（收工時只拉這個場次新增的）、插「場次開始」標記。
 # - 有場次而且 recorder 還在錄 → 沿用（mission.sh 每次都會先跑這個腳本）。
 # - 有場次但 recorder 沒在跑、或中間重開過機 → 上一個場次沒用 ./down.sh 收尾：
 #   補做還能補的（停止錄影、確認 bag 收尾、飛控連上後拍結束時的參數快照），再開新場次。
+#   上一個場次的 .BIN 不在這裡拉（要好幾分鐘），印出指令：./fc_logs.sh fetch <上一個場次>
 #
 # 過期的判斷：映像的 orca.build-hash label 跟 docker/build-hash.sh 現在算的不同。指紋只包含
 # Dockerfile、package.xml、setup.py、msg 這類「改了就要重 build」的檔案，以及 src/ 的檔案清單
@@ -90,6 +92,7 @@ if [[ -n $PREV ]]; then
   cat >&2 << EOF
 上一個場次 $PREV 沒有用 ./down.sh 收尾（直接 docker compose down、重開機或斷電）。
 補做還能補的：停止錄影、確認 bag 收尾，飛控連上後拍結束時的參數快照。容器的終端輸出已經沒辦法補存。
+飛控的 .BIN 之後用 ./fc_logs.sh fetch $PREV 拉（飛控上鎖時）。
 EOF
   docker compose stop recorder marker_log > /dev/null 2>&1 || true
   session_check_bags "$PREV" || true
@@ -130,6 +133,12 @@ if [[ -n $PREV ]]; then
   fi
 fi
 if (( NEW )); then
+  if session_fc_logs_start "$SESSION"; then
+    echo "飛控 SD 卡上已有 $(wc -l < "$SESSION_ROOT/$SESSION/info/fc_logs_start.txt") 個 .BIN，收工時只拉這個場次新增的"
+  else
+    echo '列不出飛控 SD 卡上的 .BIN，收工時不會自動拉。RPi 連得上嗎？fc_logs.py 部署了嗎' \
+      '（deploy/rpi-relay/deploy.sh fc-logs）' >&2
+  fi
   session_mark up.sh "場次 $SESSION 開始（$(session_git_version)）" > /dev/null \
     || echo '「場次開始」的標記沒發出去，看 docker compose logs marker_log' >&2
 fi
