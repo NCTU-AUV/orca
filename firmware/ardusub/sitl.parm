@@ -78,6 +78,10 @@ PSC_D_ACC_IMAX  0.1
 PSC_D_ACC_FLTE  20
 PSC_D_JERK      50
 
+# ---- EKF ----
+# 深度計的量測雜訊，同實機。SITL 自帶的預設已經是 0.1（ArduSub 程式預設 2.0），寫死是為了不受 SITL 預設改動影響
+EK3_ALT_M_NSE   0.1
+
 # ---- Failsafe ----
 FS_PILOT_INPUT    2
 FS_PILOT_TIMEOUT  3
