@@ -16,7 +16,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # 映像的 build 指紋（orca.build-hash label）：跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
 source ../../docker/build-hash.sh
-export WORLD=${WORLD:-sauvc_qual.sdf} GUI=${GUI:-1}
+source ./seed.sh
+WORLD=$(random_layout "${WORLD:-sauvc_qual.sdf}")
+export WORLD GUI=${GUI:-1}
 
 if [[ ! -f ../../ml/rfdetr/weights/checkpoint_best_total.pth ]]; then
   ../../ml/rfdetr/fetch_weights.sh

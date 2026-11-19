@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # 起整個模擬：授權容器連 X → 檢查 NVIDIA runtime → docker compose up
-# 環境變數：GUI=0 不開 Gazebo 視窗；WORLD=<檔名> 換世界檔（repo 的 sim/worlds 底下）；UNDERWATER=0 關掉水下效果
+# 環境變數：GUI=0 不開 Gazebo 視窗；WORLD=<檔名> 換世界檔（repo 的 sim/worlds 底下）；UNDERWATER=0 關掉水下效果；
+#           SEED=<數字>｜random 隨機佈局（只有 sauvc_final.sdf，見 seed.sh）
 # 世界檔有相機（model://orca_cam）時，連相機和偵測（vision profile）一起起。其他參數交給 docker compose up，
 # 例如 ./run.sh -d（背景執行）、./run.sh -d --force-recreate（重開，船回到起點）
 set -euo pipefail
 cd "$(dirname "$0")"
-export WORLD=${WORLD:-orca_pool.sdf}
+source ./seed.sh
+WORLD=$(random_layout "${WORLD:-orca_pool.sdf}")
+export WORLD
 # 映像的 build 指紋（orca.build-hash label）：跟 deploy/laptop 共用映像，laptop 的 up.sh 靠它判斷要不要重 build
 source ../../docker/build-hash.sh
 

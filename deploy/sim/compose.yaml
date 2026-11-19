@@ -13,6 +13,7 @@
 #   GUI=1|0                 開不開 Gazebo 視窗
 #   UNDERWATER=1|0          水下的樣子：世界裡的水面與水體霧、相機影像的水下後處理。0 = 全部關掉
 #   UNDERWATER_STRENGTH=1.0 相機影像水下效果的強度（0.5 更清澈、2 更混），細項見 sim/underwater.py
+#   SEED=<數字>|random      決賽主場地的隨機佈局（腳本用 seed.sh 產生 sim/worlds/generated/ 的世界檔，再把 WORLD 換成它）
 #
 # 服務：
 #   simulator        Gazebo + ArduSub SITL + mavproxy

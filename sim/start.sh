@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # ---- 可由 compose 環境變數覆寫 ----
-WORLD="${WORLD:-orca_pool.sdf}"   # /sim/worlds 底下的世界檔
+WORLD="${WORLD:-orca_pool.sdf}"   # /sim/worlds 底下的世界檔（隨機佈局是 generated/<世界>_seed<N>.sdf）
 GUI="${GUI:-1}"                   # 1 = 開 Gazebo 視窗，0 = 只跑 server
 UNDERWATER="${UNDERWATER:-1}"     # 0 = 不要水下的樣子（水面、水體霧），回到沒有水的乾淨畫面
 QGC_PORT="${QGC_PORT:-14550}"     # mavproxy → 主機上的 QGroundControl
@@ -27,8 +27,8 @@ fi
 # 相機影像的水下後處理是另一回事，在 sim_cameras 服務（gz_camera_bridge.py），吃同一個 UNDERWATER。
 world_file="/sim/worlds/${WORLD}"
 if [[ "${UNDERWATER}" == "0" ]]; then
-  sed '/UNDERWATER:BEGIN/,/UNDERWATER:END/d' "${world_file}" > "/tmp/${WORLD}"
-  world_file="/tmp/${WORLD}"
+  sed '/UNDERWATER:BEGIN/,/UNDERWATER:END/d' "${world_file}" > "/tmp/$(basename "${WORLD}")"
+  world_file="/tmp/$(basename "${WORLD}")"
 fi
 gz sim -s -r -v 3 "${server_args[@]}" "${world_file}" &
 core+=($!); all+=($!)

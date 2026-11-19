@@ -7,6 +7,7 @@
 #   PROPS=gate,q_gate ./detect_sweep.sh       # 只跑這些道具（gate q_gate orange_flare flare_red flare_yellow
 #                                             #   flare_blue drum_red drum_blue surfacing_square）
 #   UNDERWATER_STRENGTH=1.5 ./detect_sweep.sh # 水下效果的強度（「開」那一輪）
+#   SEED=7 ./detect_sweep.sh                  # 在決賽主場地的隨機佈局上拍（道具的背景不同）
 #   RUN=名稱 ./detect_sweep.sh                # 結果資料夾的名稱（預設 sweep_<時間>）
 #
 # 結果在 logs/detect/<RUN>/：summary.md（報告）、summary.json、results.csv、samples/、frames/（影像，約 100 MB）。
@@ -18,6 +19,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export RUN=${RUN:-sweep_$(date +%Y%m%d_%H%M%S)}
 export GIT_REV=${GIT_REV:-$(git -C ../.. describe --always --dirty 2>/dev/null || true)}
+source ./seed.sh
+SWEEP_WORLD=$(random_layout "${SWEEP_WORLD:-sauvc_final.sdf}")
+export SWEEP_WORLD
 
 if [[ ! -f ../../ml/rfdetr/weights/checkpoint_best_total.pth ]]; then
   ../../ml/rfdetr/fetch_weights.sh

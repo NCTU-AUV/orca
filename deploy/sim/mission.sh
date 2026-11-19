@@ -6,6 +6,7 @@
 #   ./mission.sh gate_pass -p pass_s=6                # -p 覆寫樹的 vars
 #   ./mission.sh gate_pass_yaw                        # 過門，下潛後先轉向對準門再鎖航向
 #   WORLD=sauvc_final.sdf ./mission.sh <樹>           # 決賽主場地（導航門、flare、drum、Surfacing Square）
+#   SEED=7 WORLD=sauvc_final.sdf ./mission.sh <樹>    # 決賽主場地的隨機佈局（SEED=random 隨機挑；同一個 SEED 佈局一樣）
 #   WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（空池，不需要門）
 #   GUI=0 ./mission.sh                                # 不開 Gazebo 視窗
 #   RECORD=0 ./mission.sh                             # 不錄 rosbag
@@ -25,7 +26,9 @@ cd "$(dirname "$0")"
 source ../../docker/build-hash.sh
 TREE=gate_pass
 if [[ $# -gt 0 && $1 != -* ]]; then TREE=$1; shift; fi
-export WORLD=${WORLD:-sauvc_qual.sdf} GUI=${GUI:-1}
+source ./seed.sh
+WORLD=$(random_layout "${WORLD:-sauvc_qual.sdf}")
+export WORLD GUI=${GUI:-1}
 RECORD=${RECORD:-1}
 RUN=$(basename "$TREE" .yaml)_$(date +%Y%m%d_%H%M%S)    # CSV、rosbag、裁判紀錄的名稱
 
