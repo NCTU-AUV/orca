@@ -93,6 +93,8 @@ python3 tools/sim/layout.py sauvc_final.sdf --seed 7 # 只產生世界檔、看�
 
 起始區、綠墊、Surfacing Square、資格賽道、船的出發位置不隨機。道具的方向、浮框漂移、船放進起始區的誤差這類「小擾動」目前沒有做。
 
+驗證（2026-11-19）：`sim/tests/test_layout.py` 500 個 seed 都守規則；`SEED=7 ./referee_check.sh sauvc_final.sdf` 34／34（順序 Y-B-R、第 3 個 drum 是普通紅的）。`gate_pass_yaw -p depth=1.0` 在 seed 7（門在起始區左前方，轉 −20.5° 對準）和 seed 68718（門在右前方，轉 +16.1°）都穿過導航門、沒碰到，過門時 `/comms/flare_order` 發布了 Y-B-R／R-B-Y。
+
 ## 事件與計分
 
 `sim_referee` 服務（[`sim/referee.py`](../../sim/referee.py)）讀 Gazebo 的碰撞與真值位姿，照規則發事件：
