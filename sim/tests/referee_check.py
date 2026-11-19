@@ -7,7 +7,8 @@
 不經過飛控：ArduSub 在跑但沒解鎖，推進器不出力，船完全由這支程式擺布，所以結果可以重現。
 推船用世界檔裡的 ApplyLinkWrench（/world/<名稱>/wrench/persistent），瞬移用 /world/<名稱>/set_pose。
 
-用 deploy/sim/referee_check.sh 跑（它會把兩個世界各起一次）。單獨跑：
+用 deploy/sim/referee_check.sh 跑（它會把兩個世界各起一次；SEED=7 時決賽用隨機佈局）。flare 的順序、
+drum 的種類從世界檔讀，所以隨機佈局也能檢查。單獨跑：
 
     cd deploy/sim && WORLD=sauvc_final.sdf GUI=0 docker compose up -d simulator sim_referee sim_dropper
     docker compose exec sim_referee bash -c 'source /opt/ros/humble/setup.bash && python3 /sim/tests/referee_check.py'
@@ -54,11 +55,19 @@ class Check(Node):
         ax, ay, _az, _r, _p, ayaw = [float(v) for v in root.find("frame[@name='arena']/pose").text.split()]
         self.arena = (ax, ay, ayaw)
         self.props = {}         # include 的名稱 → 在 arena 座標的 (x, y, z)
+        self.kinds = {}         # include 的名稱 → 道具種類（uri）
         for inc in root.findall('include'):
             pose = inc.find('pose')
             if pose is not None and pose.get('relative_to') == 'arena':
-                name = inc.findtext('name') or inc.findtext('uri').split('://')[-1]
-                self.props[name.strip()] = tuple(float(v) for v in pose.text.split()[:3])
+                kind = inc.findtext('uri').split('://')[-1].strip()
+                name = (inc.findtext('name') or kind).strip()
+                self.props[name] = tuple(float(v) for v in pose.text.split()[:3])
+                self.kinds[name] = kind
+        # flare 的順序（隨機佈局每次不同）：世界檔的 <orca:referee flare_order>
+        ref = next((el for el in root if el.tag.endswith('}referee') or el.tag == 'referee'), None)
+        self.flare_order = (ref.get('flare_order', '') if ref is not None else '').split()
+        # 瞬移前先停在這裡等速度消掉（空曠、離所有道具都遠，隨機佈局也一樣）
+        self.park = (36.0, 10.0, -1.0) if 'drum_1' in self.props else (5.0, 7.0, -0.6)
 
         self.events = []
         self.state = {}
@@ -70,6 +79,9 @@ class Check(Node):
         self.create_subscription(String, '/sim/referee/state', self.on_state, 10)
         self.pub_reset = self.create_publisher(Empty, '/sim/referee/reset', 10)
         self.pub_release = self.create_publisher(Empty, '/ball_dropper/release', 10)
+        self.announced = None
+        self.create_subscription(String, '/comms/flare_order', self.on_order, QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
 
         self.gz = GzNode()
         self.pub_wrench = self.gz.advertise(f'/world/{self.world}/wrench/persistent', EntityWrench)
@@ -81,6 +93,9 @@ class Check(Node):
     def on_event(self, msg):
         with self.lock:
             self.events.append(json.loads(msg.data))
+
+    def on_order(self, msg):
+        self.announced = msg.data
 
     def on_state(self, msg):
         self.state = json.loads(msg.data)
@@ -126,10 +141,10 @@ class Check(Node):
 
     def teleport(self, x, y, z, heading=0.0, settle=True):
         """船擺到 arena (x, y, z)。heading：船頭相對 arena +x 的角度 [rad]。
-        set_pose 只改位置、不會把速度歸零，船會帶著原本的速度繼續滑；所以先擺過去等阻力把速度吃掉
-        （約 2.5 秒），再擺一次到正確的位置。"""
+        set_pose 只改位置、不會把速度歸零，船會帶著原本的速度繼續滑；所以先擺到空曠的停泊點（self.park），
+        等阻力把速度吃掉（約 2.5 秒），再擺到目標。直接在目標旁邊等的話，隨機佈局時可能先滑去碰到旁邊的道具。"""
         if settle:
-            self.teleport(x, y, z, heading, settle=False)
+            self.teleport(*self.park, heading, settle=False)
             self.spin(2.5)
         self.clear()
         wx, wy = self.to_world(x, y)
@@ -214,10 +229,11 @@ class Check(Node):
         self.teleport(P['start_zone'][0], P['start_zone'][1], -0.2)
         self.reset()
 
-        # 下潛之後離開起始區（推 1.2 秒，約到 0.7 m：推太久球會碰到 2 m 深的池底，那也算船碰池底）
+        # 下潛之後離開起始區（推 1.2 秒，約到 0.7 m：推太久球會碰到 2 m 深的池底，那也算船碰池底）。
+        # 往前只推 2 秒（約 1.7 m）：再遠可能撞到隨機擺在 y = 4～8 m 的橘色 flare
         self.push(fz=-25, seconds=1.2)
         self.expect('下潛', 'submerged')
-        self.push(fy=25, seconds=4.0)
+        self.push(fy=25, seconds=2.0)
         self.expect('下潛後離開起始區', 'left_start_zone', submerged=True)
 
         # 導航門：撞柱子（擋住、扣 2 分），再從中間穿過（15 分）
@@ -228,21 +244,25 @@ class Check(Node):
         v = self.vehicle_arena()
         self.record('導航門的柱子把船擋住', v[1] < gate[1], f'船在 arena y = {v[1]:.2f}，門在 y = {gate[1]:.2f}')
         self.teleport(gate[0], gate[1] - 1.0, -1.2, math.pi / 2)
-        self.push(fy=25, seconds=5.0)
+        self.push(fy=25, seconds=3.0)       # 約到 y = 13.5：再遠可能撞到隨機擺在 y ≥ 14.4 m 的 flare
         self.expect('穿過導航門 15 分', 'gate_passed', points=15)
+        code = '-'.join({'red': 'R', 'yellow': 'Y', 'blue': 'B'}[c] for c in self.flare_order)
+        self.expect(f'過門後告知 flare 順序 {code}', 'flare_order_announced', order=code)
+        self.spin(0.5)
+        self.record('/comms/flare_order 收到同一個順序', self.announced == code, f'收到 {self.announced!r}')
 
-        # 池底、池壁：各扣 5 分
-        self.teleport(36.0, 14.0, -1.7, math.pi / 2)
+        # 池底、池壁：各扣 5 分（y = 10：橘色 flare 的區域與門的線之間，隨機佈局也不會有道具）
+        self.teleport(36.0, 10.0, -1.7, math.pi / 2)
         self.push(fz=-40, seconds=2.0)
         self.expect('碰到池底扣 5 分', 'penalty_floor_wall', what='floor', points=-5)
-        self.teleport(49.0, 14.0, -1.0, 0.0)
+        self.teleport(49.0, 10.0, -1.0, 0.0)
         self.push(fx=30, seconds=3.0)
         self.expect('碰到池壁扣 5 分', 'penalty_floor_wall', what='wall', points=-5)
         v = self.vehicle_arena()
         self.record('池壁把船擋住', v[0] < 50.0, f'船在 arena x = {v[0]:.2f}，牆在 x = 50')
 
-        # 紅 → 藍 → 黃 flare：照指定順序把球撞下來
-        for colour in ('red', 'blue', 'yellow'):
+        # 照世界檔的順序把三支 flare 的球撞下來
+        for colour in self.flare_order:
             fx, fy, _ = P[f'flare_{colour}']
             self.spin(0.2)
             before = self.poses.get(f'flare_{colour}')
@@ -254,15 +274,17 @@ class Check(Node):
             moved = before and after and (math.dist(before[:3], after[:3]) > 0.03 or after[3] > 10)
             self.record(f'{colour} flare 被撞歪或推走（不會自己回正）', bool(moved),
                         f'底盤位移 {math.dist(before[:3], after[:3]):.2f} m、傾斜 {after[3]:.0f}°' if before and after else '沒有位姿')
-        self.expect('三支 flare 照順序（紅藍黃）加 60 分', 'flare_order_bonus', points=60)
+        self.expect(f'三支 flare 照順序（{code}）加 60 分', 'flare_order_bonus', points=60)
 
-        # 放球：停在裝 pinger 的紅 drum 上方，發 ROS 的放球指令
+        # 放球：停在第 3 個 drum 上方，發 ROS 的放球指令（是哪一種 drum、幾分，看世界檔）
         drum = P['drum_3']
+        kind = self.kinds['drum_3']
+        drum_pts = {'drum_blue': 30, 'drum_red_pinger': 50, 'drum_red': 10}[kind]
         self.teleport(drum[0], drum[1], -1.2, math.pi / 2)
         self.spin(0.5)
         self.pub_release.publish(Empty())
         self.expect('放球指令（ROS /ball_dropper/release）→ 球離開船', 'ball_released', 5.0)
-        self.expect('球掉進裝 pinger 的紅 drum 並留在裡面 50 分', 'ball_in_drum', 25.0, drum='drum_red_pinger', points=50)
+        self.expect(f'球掉進 drum_3（{kind}）並留在裡面 {drum_pts} 分', 'ball_in_drum', 25.0, drum=kind, points=drum_pts)
 
         # Surfacing Square：在框內上浮、沒碰到框
         sq = P['surfacing_square']
@@ -271,7 +293,7 @@ class Check(Node):
         e = self.expect('在 Surfacing Square 內上浮、沒碰框：5 + 20 分', 'surfaced', 15.0, points=25)
         end = self.expect('上浮後這次結束', 'run_ended', reason='surfaced')
         score = end['score'] if end else None
-        want = 15 - 2 - 5 - 5 + 60 + 60 + 50 + 25
+        want = 15 - 2 - 5 - 5 + 60 + 60 + drum_pts + 25
         self.record(f'總分 = {want}', score == want, f'裁判的分數 {score}')
 
         # 橘色 flare：碰到就 abort；放開後自己回正
@@ -296,15 +318,15 @@ class Check(Node):
         # 池底碰 5 次 abort
         self.reset()
         for i in range(5):
-            self.teleport(36.0, 14.0, -1.75, math.pi / 2)
+            self.teleport(36.0, 10.0, -1.75, math.pi / 2)
             self.push(fz=-40, seconds=1.2)
-            self.teleport(36.0, 14.0, -1.2, math.pi / 2)
+            self.teleport(36.0, 10.0, -1.2, math.pi / 2)
             self.spin(0.8)
         self.expect('碰池底 5 次 abort', 'abort', reason='floor_wall_touches')
 
         # 壓在池底超過 10 秒 abort
         self.reset()
-        self.teleport(36.0, 14.0, -1.75, math.pi / 2)
+        self.teleport(36.0, 10.0, -1.75, math.pi / 2)
         self.push(fz=-40)
         self.expect('壓在池底累計超過 10 秒 abort', 'abort', 16.0, reason='floor_wall_time')
         self.clear()

@@ -9,6 +9,11 @@
 **只給模擬用**：這些 topic 實機上不存在，任務程式不要訂閱（那等於偷看答案）。用途是驗證模擬與事後看紀錄：
 事件也寫進 /logs/<名稱>.jsonl（deploy/sim/logs/referee/），recorder 錄 rosbag 時也會錄到。
 
+另外扮演比賽的 Game Master 告知 flare 順序（任務可以訂閱這一個）：
+    /comms/flare_order   std_msgs/String（latched），例如 "R-B-Y"
+決賽時船第一次完整穿過導航門，就發布這次的順序（規則：過了門才告訴隊伍，隊伍再用自己的通訊設備傳給 AUV）。
+重新計分時發布空字串（還沒告知）。**這個 topic 是暫定的**：實機的通訊方式還沒定，定了之後改 FLARE_ORDER_TOPIC。
+
 決賽（世界檔 <orca:referee mode="final">，sauvc_final.sdf）
     gate_passed            完整穿過導航門                                    +15
     penalty_gate           碰到導航門（每一次）                               -2
@@ -21,6 +26,7 @@
     ball_missed            球停在 drum 外面
     surfaced               下潛之後浮出水面                                   +5，這次結束
                            過門之後、在 Surfacing Square 內上浮、整趟沒碰到框  再 +20
+    flare_order_announced  第一次過門時告知 flare 順序（同時發布 /comms/flare_order）
     其他：submerged（第一次完全下潛）、left_start_zone（離開起始區；submerged=false 表示沒先下潛就走）、
           contact_begin／contact_end（每一段接觸，含碰到的是哪個模型的哪個 collision）。
     規則：過門之前做其他任務不算分（"Navigation must be completed before any other task"），
@@ -44,7 +50,9 @@
            球在不在 drum 裡、有沒有下潛／上浮、在不在框內，都用 Gazebo 的真值位姿算。
     下面的尺寸常數要跟 sim/models 裡的模型一致。
 
-設定：環境變數 WORLD（世界檔檔名，在 /sim/worlds 底下）、LOG_DIR（/logs）、RUN_NAME（紀錄檔的名稱）。
+設定：環境變數 WORLD（世界檔檔名，在 /sim/worlds 底下；隨機佈局是 generated/<世界>_seed<N>.sdf）、
+LOG_DIR（/logs）、RUN_NAME（紀錄檔的名稱）。隨機佈局的真值（世界檔旁邊的 .layout.json，tools/sim/layout.py 產生）
+會放進第一則 reset 事件的 layout 欄位，所以紀錄檔裡查得到這次的佈局與 seed。
 模擬重開（模擬時間倒退）會自動重新開始計分。在 orca-sim image 裡跑，見 deploy/sim/compose.yaml 的 sim_referee 服務。
 """
 import json
@@ -101,6 +109,8 @@ POINTS_FLARE = 20
 POINTS_FLARE_ORDER = 60
 POINTS_DRUM = {'drum_blue': 30, 'drum_red_pinger': 50, 'drum_red': 10}
 POINTS_SURFACE = 5
+FLARE_ORDER_TOPIC = '/comms/flare_order'     # 暫定，見檔頭
+FLARE_CODE = {'red': 'R', 'yellow': 'Y', 'blue': 'B'}
 POINTS_SQUARE = 20
 
 
@@ -178,7 +188,15 @@ class Referee(Node):
     def __init__(self):
         super().__init__('sim_referee')
         world_file = os.environ.get('WORLD', 'orca_pool.sdf')
-        self.world, self.config, self.kinds = load_world(os.path.join(SIM_DIR, 'worlds', world_file))
+        self.world_file = world_file
+        world_path = os.path.join(SIM_DIR, 'worlds', world_file)
+        self.world, self.config, self.kinds = load_world(world_path)
+        self.layout = None                  # 隨機佈局的真值（tools/sim/layout.py）；固定佈局沒有
+        try:
+            with open(os.path.splitext(world_path)[0] + '.layout.json') as f:
+                self.layout = json.load(f)
+        except (OSError, ValueError):
+            pass
         self.mode = self.config.get('mode', 'none')
         self.flare_order = self.config.get('flare_order', '').split()
         self.get_logger().info(f'世界 {self.world}（{world_file}），模式 {self.mode}'
@@ -188,6 +206,8 @@ class Referee(Node):
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_event = self.create_publisher(String, '/sim/referee/events', latched)
         self.pub_state = self.create_publisher(String, '/sim/referee/state', 10)
+        self.pub_order = self.create_publisher(String, FLARE_ORDER_TOPIC, QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_subscription(Empty, '/sim/referee/reset', lambda _m: self.request_reset('收到 /sim/referee/reset'), 10)
 
         self.log = None
@@ -379,8 +399,13 @@ class Referee(Node):
         with self.lock:
             if self.reset_reason is not None:
                 why, self.reset_reason = self.reset_reason, None
+                first = why == '啟動'
                 self.reset_state()
-                self.emit('reset', reason=why, mode=self.mode)
+                self.pub_order.publish(String(data=''))          # flare 順序：還沒告知
+                extra = dict(world=self.world_file)
+                if first and self.layout:
+                    extra['layout'] = self.layout
+                self.emit('reset', reason=why, mode=self.mode, **extra)
             now, vehicle = self.sim_t, self.pose_of(VEHICLE)
             if now is None or vehicle is None or not self.scene_ok:
                 return
@@ -573,6 +598,10 @@ class Referee(Node):
         elif not self.gate_passed:
             self.gate_passed = True
             self.emit('gate_passed', POINTS_GATE, **detail)
+            if self.flare_order:
+                code = '-'.join(FLARE_CODE.get(c, c) for c in self.flare_order)
+                self.pub_order.publish(String(data=code))
+                self.emit('flare_order_announced', order=code, topic=FLARE_ORDER_TOPIC)
         else:
             self.emit('gate_passed', 0, counted=False, **detail)
 
