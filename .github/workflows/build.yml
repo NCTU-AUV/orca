@@ -1,4 +1,4 @@
-# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，檢查 tools、mission 的 Python 語法，跑過門流程與行為樹的測試
+# 每次 push、PR：在 ROS 2 Humble 裡 colcon build，檢查 tools、sim 的 Python 語法，跑隨機佈局與行為樹的測試
 name: build
 
 on:
@@ -17,9 +17,7 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py mission/*.py sim/*.py sim/tests/*.py tools/sim/*.py tools/sim_detect/*.py
-      - name: mission tests
-        run: python3 mission/test_gate_pass.py
+        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py sim/*.py sim/tests/*.py tools/sim/*.py tools/sim_detect/*.py
       # 隨機佈局（tools/sim/layout.py）：照規則抽、同一個 seed 結果一樣、只改該改的地方
       - name: random layout tests
         run: python3 sim/tests/test_layout.py

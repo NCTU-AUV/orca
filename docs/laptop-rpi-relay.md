@@ -53,8 +53,6 @@ docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
 
 # 過門（行為樹，src/orca_mission/trees/gate_pass.yaml）：先跑 ./up.sh、再跑行為樹（解鎖前會等你按 Enter）
 ./mission.sh
-# 舊版過門（mission/gate_pass.py）
-./gate_pass.sh
 ```
 
 上岸檢查飛控連線（不要解鎖）：`docker compose exec fc_adapter bash -ic 'ros2 topic echo --once /mavros/state'` 要看到 `connected: true`，QGC 也要同時連得上。
@@ -63,9 +61,8 @@ docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
 
 - `./up.sh`：沒有權重就先下載 → 映像不存在或過期才 build → 起 `front_camera`、`object_detector`、`fc_adapter` → 等飛控連線（60 秒）、相機（60 秒）、偵測（300 秒）。已經在跑、映像沒換的容器不重開，mavros 的連線不會斷。不起 `recorder`、`mission`。
 - 「過期」是指映像的 `orca.build-hash` label 跟 [`docker/build-hash.sh`](../docker/build-hash.sh) 現在算出來的不同：改了 Dockerfile、`package.xml`、`setup.py`、msg，或 `src/` 新增、刪除、改名檔案才會重 build；改 `.py`、樹的 yaml 不會（`src/` 掛進容器，重跑任務就生效）。要強制重 build 用 `./up.sh --build`。
-- 模擬的 `./run.sh`、`./mission.sh`、`./gate_pass.sh` 跟實機共用映像，build 時也會蓋上同樣的指紋，跑過模擬再回來跑實機不會白 build。
+- 模擬的 `./run.sh`、`./mission.sh` 跟實機共用映像，build 時也會蓋上同樣的指紋，跑過模擬再回來跑實機不會白 build。
 - `./mission.sh [樹] [-p 變數=值 ...]`：先跑 `./up.sh` → 開始錄 rosbag → 跑行為樹（列檢查清單、等 Enter）→ 樹結束、上鎖、船浮上水面後停止錄影，最後印出 bag 的路徑。`RECORD=0 ./mission.sh` 不錄。
-- `./gate_pass.sh`（舊版過門）也是先跑 `./up.sh`，不錄 rosbag。
 - 改了 `compose.yaml` 要套用到已經在跑的容器：`docker compose up -d <服務>`。全部關掉：`docker compose down`。
 
 ## 紀錄（CSV、rosbag）
@@ -76,9 +73,9 @@ docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py
 |---|---|---|
 | `logs/mission/<樹>_<時間>.csv` | 行為樹的紀錄（20 Hz） | `./mission.sh` |
 | `logs/bag/<樹>_<時間>/` | rosbag（MCAP），一次任務一個 `.mcap`，跟 CSV 同名 | `./mission.sh`（`RECORD=0` 不錄） |
-| `logs/fc_adapter/*.csv` | 水池測試腳本、舊版過門的紀錄 | `water_*.py`、`./gate_pass.sh` |
+| `logs/fc_adapter/*.csv` | 水池測試腳本的紀錄 | `water_*.py` |
 
-- rosbag 從樹開始（列檢查清單時）錄到樹結束、船浮上水面（上鎖後最多等 30 秒，再按一次 Ctrl-C 不等）。`docker compose up -d`、`./up.sh`、`./gate_pass.sh`、水池測試腳本都不錄。
+- rosbag 從樹開始（列檢查清單時）錄到樹結束、船浮上水面（上鎖後最多等 30 秒，再按一次 Ctrl-C 不等）。`docker compose up -d`、`./up.sh`、水池測試腳本都不錄。
 - 錄全部 topic（mavros、`/auv_control`、`/detections`、`/mission/status`、`/rosout` 的節點 log）。影像只錄畫好框的 JPEG（`/detections/image/compressed`），相機的影像（原始、JPEG）都不錄，約 4 GB／小時。要改錄哪些 topic 看 `compose.yaml` 的 `recorder`。
 - 看 bag：用 [Foxglove](https://foxglove.dev) 開 `.mcap`（還在寫的檔打不開），layout 用 [`tools/foxglove/orca_mission.json`](../tools/foxglove/orca_mission.json)。回放：先 `docker compose down`，再 `docker compose run --rm gui_tools ros2 bag play /bags/<樹>_<時間>`（`gui_tools` 把 `logs/bag/` 唯讀掛在 `/bags`）。
 - 不經 `./mission.sh` 單獨錄：`BAG_NAME=<名稱> docker compose --profile record up -d recorder`，存到 `logs/bag/<名稱>/`；停止用 `docker compose --profile record stop recorder`（送 SIGINT，讓它把檔案收尾）。

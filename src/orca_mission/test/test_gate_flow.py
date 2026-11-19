@@ -1,7 +1,7 @@
 """過門的行為樹（trees/gate_pass.yaml）在平面模型裡跑。
 
 流程：下潛 → 航向鎖住、只用 sway 平移對準（CenterGate）→ 接近（直到完全看不到門）→ 盲走 → 停。
-其餘情境（跟丟、逾時、資料中斷）跟 mission/test_gate_pass.py 一樣。
+其餘情境：跟丟、逾時、資料中斷。
 
     cd src/orca_mission && python3 -m pytest test/
 """
@@ -117,7 +117,7 @@ def test_approach_until_gate_gone_then_blind_7s():
     assert any('近距離完全看不到門' in line for line in h.logs), h.logs
     approach = [t for t, name, _ in h.trace if name == 'ApproachGate']
     cruise = [t for t, name, _ in h.trace if name == 'Cruise']
-    # 門框寬 0.7 大約在 1.55 m（舊版在這裡就盲走）；現在要到 1 m 內、看不到門之後才開始盲走
+    # 門框寬 0.7 大約在 1.55 m；ApproachGate 不看寬度，要到 1 m 內、看不到門之後才開始盲走
     assert h.ahead_at[round(approach[-1], 3)] < h.world.min_range
     assert any(c.surge > 0 for t, name, c in h.trace if name == 'ApproachGate' and h.ahead_at[round(t, 3)] < 1.5)
     assert cruise[-1] - cruise[0] == pytest.approx(7.0, abs=0.15)
@@ -142,7 +142,7 @@ def test_last_boxes_narrow_still_counts_as_close():
 
 
 def test_lost_when_close_goes_blind():
-    # 2.2 m 外就看不到門，模型速度 0.3 m/s：盲走 8 秒才走得到門（同 mission/test_gate_pass.py）
+    # 2.2 m 外就看不到門，模型速度 0.3 m/s：盲走 8 秒才走得到門
     h = Harness(World(gate_xy=(6.0, 0.5), min_range=2.2), read(GATE_PASS, {'pass_s': 8.0}))
     h.run()
     assert_passed(h)

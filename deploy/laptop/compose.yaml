@@ -5,8 +5,7 @@
 #
 #   ./up.sh                                       # 起 front_camera、object_detector、fc_adapter，等就緒；映像不存在或過期才 build，已經在跑的不重開
 #   docker compose up -d                          # 同上三個服務（不等就緒）；recorder、mission 不會起
-#   ./mission.sh                                  # 行為樹版過門（mission 服務，會先跑 ./up.sh），跑樹時才錄 rosbag；解鎖前會等你按 Enter
-#   ./gate_pass.sh                                # 舊版過門（mission/gate_pass.py）
+#   ./mission.sh                                  # 過門（行為樹，mission 服務，會先跑 ./up.sh），跑樹時才錄 rosbag；解鎖前會等你按 Enter
 #   docker compose up -d front_camera object_detector   # 只跑影像（飛控沒接時）
 #
 # 服務：
@@ -68,9 +67,8 @@ services:
       - torch-cache:/root/.cache       # rfdetr／torch 下載的檔案，避免每次重抓
     command: [ros2, run, orca_perception, detector]
 
-  # mavros + auv_adapter（/auv_control）。水池測試腳本、舊版過門在這裡面跑：
+  # mavros + auv_adapter（/auv_control）。水池測試腳本在這裡面跑：
   #   docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
-  #   docker compose exec fc_adapter bash -ic 'python3 /orca/mission/gate_pass.py'    # 要有 object_detector
   # 第一次用之前，RPi 的 mavproxy 要先加 udpin 14560（deploy/rpi-relay/mavproxy-udpin.sh）
   fc_adapter:
     <<: [*ros, *base]
@@ -78,7 +76,6 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
-      - ../../mission:/orca/mission:ro
       - ./logs/fc_adapter:/logs
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, rpi_relay]

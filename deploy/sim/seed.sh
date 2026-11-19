@@ -1,4 +1,4 @@
-# 隨機佈局：用 source 載入（run.sh、mission.sh、gate_pass.sh、referee_check.sh、detect_sweep.sh 都用它）。
+# 隨機佈局：用 source 載入（run.sh、mission.sh、referee_check.sh、detect_sweep.sh 都用它）。
 #
 #   random_layout <世界檔>    SEED 沒設：原樣印出 <世界檔>（固定佈局）
 #                             SEED=<數字> 或 SEED=random：用 tools/sim/layout.py 照 SAUVC 2027 規則抽一個佈局，
