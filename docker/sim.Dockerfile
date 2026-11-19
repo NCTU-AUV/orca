@@ -1,5 +1,6 @@
 # orca-sim：ROS 2 Humble + Gazebo Harmonic + ArduSub SITL（與實機同版本）+ ardupilot_gazebo + MAVProxy。
-# build context 是 docker/（不需要任何檔案）；世界、模型、start.sh、參數由 compose 掛載。
+# build context 是 docker/（不需要任何檔案）；另外由 compose 的 additional_contexts 送進 sim_plugins（= sim/plugins，
+# 自寫的 gz 外掛原始碼）。世界、模型、start.sh、參數由 compose 掛載。
 # ---- base：ROS 2 Humble + Gazebo Harmonic（OSRF apt）----
 FROM ros:humble AS base
 
@@ -44,6 +45,11 @@ RUN git clone --depth 1 --branch ${ARDUPILOT_GAZEBO_REF} https://github.com/Ardu
  && GZ_VERSION=harmonic cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
  && cmake --build build --target ArduPilotPlugin -j${JOBS}
 
+# 自寫的 gz 外掛（sim/plugins）：放在最後，改外掛不會讓上面的 ArduSub 重編
+COPY --from=sim_plugins thrust_curve /src/orca_plugins/thrust_curve
+RUN cmake -S /src/orca_plugins/thrust_curve -B /src/orca_plugins/build/thrust_curve -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+ && cmake --build /src/orca_plugins/build/thrust_curve -j${JOBS}
+
 # ---- 最終 image ----
 FROM base
 
@@ -61,8 +67,9 @@ RUN pip3 install --no-cache-dir --no-deps opencv-python-headless==4.6.0.66
 
 COPY --from=build /src/ardupilot/build/sitl/bin/ardusub /usr/local/bin/ardusub
 COPY --from=build /src/ardupilot_gazebo/build/libArduPilotPlugin.so /usr/local/lib/ardupilot_gazebo/
+COPY --from=build /src/orca_plugins/build/thrust_curve/libOrcaThrustCurve.so /usr/local/lib/orca_gz/
 
-ENV GZ_SIM_SYSTEM_PLUGIN_PATH=/usr/local/lib/ardupilot_gazebo
+ENV GZ_SIM_SYSTEM_PLUGIN_PATH=/usr/local/lib/ardupilot_gazebo:/usr/local/lib/orca_gz
 # 世界、模型、start.sh 掛載到 /sim，飛控參數掛載到 /params，改了不必重建 image
 ENV GZ_SIM_RESOURCE_PATH=/sim/models
 CMD ["/sim/start.sh"]

@@ -7,7 +7,8 @@
   座標：機體 FLU（x 前、y 左、z 上），原點為質心。
   浮力體（main_body_buoyancy）中心在質心上方 0.115 m，浮心高於重心，靜止時自動回正。
   推進器 0-3 垂直、4-7 水平（與 x 軸夾 45 度）；推力沿各自 joint 的 x 軸。
-  指令 topic：/model/orca/joint/thruster_N_joint/cmd_thrust（gz.msgs.Double，單位 N）。
+  推力：ArduPilotPlugin 送 PWM 到 /model/orca/joint/thruster_N_joint/cmd_pwm，orca::ThrustCurve 依 T200 推力表
+  （t200_bollard.csv）換成推力，再送到 Thruster 外掛的 /model/orca/joint/thruster_N_joint/cmd_thrust（N）。
 -->
 <sdf version="1.9">
   <model name="orca">
@@ -243,9 +244,27 @@
       <thrust_coefficient>1.0</thrust_coefficient>
     </plugin>
     <!--
+      PWM → 推力：查 Blue Robotics 公開的 T200 靜態推力表（t200_bollard.csv，10～20 V），在 voltage 之間內插，
+      正反轉取平均。T200 有死區（約 1472～1528 µs 推力為 0），小推力遠比線性小，例如 16 V 時
+      PWM 1550／1600／1700／1900 → 1.3／5.3／16.0／45.7 N。原始碼與細節見 sim/plugins/thrust_curve/。
+      voltage 是實機下水時的電池電壓；12～16 V 的曲線形狀幾乎一樣，只差一個倍數。
+    -->
+    <plugin filename="OrcaThrustCurve" name="orca::ThrustCurve">
+      <table>model://orca/t200_bollard.csv</table>
+      <voltage>16</voltage>
+      <joint_name>thruster_0_joint</joint_name>
+      <joint_name>thruster_1_joint</joint_name>
+      <joint_name>thruster_2_joint</joint_name>
+      <joint_name>thruster_3_joint</joint_name>
+      <joint_name>thruster_4_joint</joint_name>
+      <joint_name>thruster_5_joint</joint_name>
+      <joint_name>thruster_6_joint</joint_name>
+      <joint_name>thruster_7_joint</joint_name>
+    </plugin>
+    <!--
       ArduPilotPlugin：與 SITL 以 JSON over UDP 9002 交換狀態與 8 路 PWM，lockstep 同步。
-      推力 [N] = multiplier * ((PWM - 1100) / 800 - 0.5)，|multiplier| = 90 → ±45 N
-      （T200 @16 V 約 -4.07 ~ +5.25 kgf 的平均）。
+      送到 cmd_pwm 的值 = multiplier * ((PWM - 1100) / 800 - 0.5)，|multiplier| = 800 → PWM - 1500 [µs]
+      （範圍 ±400），由上面的 orca::ThrustCurve 換成推力。
       multiplier 的正負號 = MOT_n_DIRECTION * (推進器 joint 軸與 ArduSub 定義的推力方向同向 ? +1 : -1)：
       實機用 MOT_n_DIRECTION 補償螺旋槳正反轉與接線，模擬沒有這些差異，在這裡抵銷，
       使 PWM 的意義與實機相同。
@@ -267,81 +286,81 @@
       <control channel="0">
         <jointName>thruster_5_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_5_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_5_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>90</multiplier>
+        <multiplier>800</multiplier>
       </control>
       <!-- SERVO2 = ArduSub 馬達 2（水平、左前）→ 推進器 4 -->
       <control channel="1">
         <jointName>thruster_4_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_4_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_4_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>-90</multiplier>
+        <multiplier>-800</multiplier>
       </control>
       <!-- SERVO3 = ArduSub 馬達 3（水平、右後）→ 推進器 7 -->
       <control channel="2">
         <jointName>thruster_7_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_7_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_7_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>-90</multiplier>
+        <multiplier>-800</multiplier>
       </control>
       <!-- SERVO4 = ArduSub 馬達 4（水平、左後）→ 推進器 6 -->
       <control channel="3">
         <jointName>thruster_6_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_6_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_6_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>90</multiplier>
+        <multiplier>800</multiplier>
       </control>
       <!-- SERVO5 = ArduSub 馬達 5（垂直、右前）→ 推進器 1 -->
       <control channel="4">
         <jointName>thruster_1_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_1_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_1_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>90</multiplier>
+        <multiplier>800</multiplier>
       </control>
       <!-- SERVO6 = ArduSub 馬達 6（垂直、左前）→ 推進器 0 -->
       <control channel="5">
         <jointName>thruster_0_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_0_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_0_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>-90</multiplier>
+        <multiplier>-800</multiplier>
       </control>
       <!-- SERVO7 = ArduSub 馬達 7（垂直、右後）→ 推進器 3 -->
       <control channel="6">
         <jointName>thruster_3_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_3_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_3_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>-90</multiplier>
+        <multiplier>-800</multiplier>
       </control>
       <!-- SERVO8 = ArduSub 馬達 8（垂直、左後）→ 推進器 2 -->
       <control channel="7">
         <jointName>thruster_2_joint</jointName>
         <type>COMMAND</type>
-        <cmd_topic>/model/orca/joint/thruster_2_joint/cmd_thrust</cmd_topic>
+        <cmd_topic>/model/orca/joint/thruster_2_joint/cmd_pwm</cmd_topic>
         <servo_min>1100</servo_min>
         <servo_max>1900</servo_max>
         <offset>-0.5</offset>
-        <multiplier>90</multiplier>
+        <multiplier>800</multiplier>
       </control>
     </plugin>
 

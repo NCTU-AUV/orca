@@ -36,6 +36,8 @@ services:
     build:
       context: ../../docker
       dockerfile: sim.Dockerfile
+      additional_contexts:
+        sim_plugins: ../../sim/plugins   # 自寫的 gz 外掛原始碼（sim.Dockerfile 的 COPY --from=sim_plugins）
     network_mode: host
     init: true                    # 讓 docker stop 的 SIGTERM 送得到 start.sh
     gpus: all

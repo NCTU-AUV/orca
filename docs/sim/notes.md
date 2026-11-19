@@ -31,6 +31,7 @@
 - **ArduPilot 的建置需要 `empy` 3.x**，裝到 4.x 會失敗（`sim/Dockerfile` 固定 3.3.4）。
 - **MAVProxy 用 `pip install --no-deps` 裝**：只做 MAVLink 轉送，不需要它的地圖、繪圖功能帶進來的 OpenCV、VTK、matplotlib，image 小很多。
 - **推進器方向**：`MOT_n_DIRECTION` 照實機設定（−1, 1, −1, 1, 1, −1, −1, 1）。實機用它補償螺旋槳正反轉與接線，模擬沒有這些差異，所以在外掛的推力倍率乘上相同的正負號抵銷（`models/orca/model.sdf` 的 `<multiplier>`）。這樣 PWM 的意義、測試程式裡的 `VERT_SIGN`、`YAW_SIGN` 都與實機一致。
+- **推力曲線用 T200 的實測表，不是直線**：ArduPilotPlugin 的 COMMAND 只能把 PWM 線性換算，但 T200 有死區（約 1472～1528 µs 推力為 0），小推力遠比線性小；實機的 PWM 又大多只偏離中位幾十 µs，直線會高估好幾倍（實機紀錄的分析見 `tools/sysid/analyze.py`）。所以外掛改送「PWM − 1500」（`<multiplier>` ±800、`<offset>` −0.5）到 `.../cmd_pwm`，自寫的 `orca::ThrustCurve`（`sim/plugins/thrust_curve/`，在 `docker/sim.Dockerfile` 的 build stage 編）查 Blue Robotics 公開的推力表（`models/orca/t200_bollard.csv`，`<voltage>` 16 V，正反轉取平均）後送到 Thruster 的 `.../cmd_thrust`。換成曲線後，鎖航向、定深的誤差小時 PWM 落在死區，收斂變慢：`smoke_test` 轉 90° 從約 4 秒變約 10 秒、過衝約 5°（直線時不到 1°）。實機有同樣的死區。
 - **馬達對應**經 MANUAL 下 12 個方向（前後、左右、上下、左右轉、pitch、roll 各正負）逐一實測確認，表在 PLAN.md。
 - **航向的數值**：船頭朝 Gazebo 的 +x（東）時，飛控報約 77°，不是 90°。沒有 EKF 原點時飛控不做磁偏角補償，報的是磁北航向；差的 13° 是模擬地點的磁偏角。實機一樣沒有原點。
 - **MAVLink 測試的陷阱**（直接用 pymavlink 送指令時）：
