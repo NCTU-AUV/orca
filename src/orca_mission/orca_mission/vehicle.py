@@ -1,6 +1,6 @@
 """載具狀態（只讀）與送給 /auv_control 的指令。這個檔案不 import ROS，可以單獨測。
 
-單位與方向（跟 orca_msgs/AuvControl、mission/runner.py 相同）：
+單位與方向（跟 orca_msgs/AuvControl 相同）：
   深度：歸零時為 0，往下為正 [m]
   航向：歸零時為 0，順時針為正 [deg]，範圍 [-180, 180)
 

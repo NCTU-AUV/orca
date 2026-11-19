@@ -59,7 +59,6 @@ docker compose down                         # 全部關掉
 GUI=0 ./run.sh                 # 不開 Gazebo 視窗
 WORLD=<檔名> ./run.sh          # 換 sim/worlds/ 底下的世界檔
 ./mission.sh                   # 行為樹過門：SAUVC 2027 資格賽（sauvc_qual.sdf），見 docs/sim/README.md
-./gate_pass.sh                 # 舊版過門（mission/gate_pass.py）
 ```
 
 QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，否則跟 mavros 的搖桿指令打架。
@@ -70,14 +69,12 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 
 | 功能 | 指令 | 說明 |
 |---|---|---|
-| 過門（行為樹） | `./mission.sh` | 起服務、等飛控與偵測就緒（實機是 `./up.sh`：映像不存在或過期才 build，已經在跑的容器不重開），再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh gate_pass_yaw` 是下潛後先轉 yaw 對準門、再鎖航向的版本（[`gate_pass_yaw.yaml`](src/orca_mission/trees/gate_pass_yaw.yaml)，流程圖 [gate_pass_yaw.md](src/orca_mission/trees/gate_pass_yaw.md)）；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
-| 過門（舊版狀態機） | `./gate_pass.sh` | 起服務、等飛控／相機／偵測就緒、解鎖前等你按 Enter（模擬不等），然後下潛 → 對準 → 前進 → 盲走過門 → 上鎖。可加參數，例如 `./gate_pass.sh --depth 0.3 --surge 0.2 --pass-s 5`，全部參數見 [`mission/gate_pass.py`](mission/gate_pass.py) 的 `Params` |
+| 過門 | `./mission.sh` | 起服務、等飛控與偵測就緒（實機是 `./up.sh`：映像不存在或過期才 build，已經在跑的容器不重開），再用 `mission` 服務跑 [`src/orca_mission/trees/gate_pass.yaml`](src/orca_mission/trees/gate_pass.yaml)（流程圖 [gate_pass.md](src/orca_mission/trees/gate_pass.md)）。實機解鎖前列檢查清單、等 Enter。`-p` 覆寫參數，例如 `./mission.sh gate_pass -p depth=0.5 -p pass_s=6`；`./mission.sh gate_pass_yaw` 是下潛後先轉 yaw 對準門、再鎖航向的版本（[`gate_pass_yaw.yaml`](src/orca_mission/trees/gate_pass_yaw.yaml)，流程圖 [gate_pass_yaw.md](src/orca_mission/trees/gate_pass_yaw.md)）；`./mission.sh smoke_test` 是不需要門的動作測試。說明見 [src/orca_mission/README.md](src/orca_mission/README.md) |
 | 水池測試：定深 | `docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'` | 預設 0.15 → 0.20 → 0.10 m。要改就把深度接在後面，例如 `water_depth.py 0.1 0.2` |
 | 水池測試：定向 | 同上，檔名換成 `water_heading.py` | 定深 0.15 m，預設 90 → 0 → −90 → 0°。要改就把角度接在後面，例如 `water_heading.py 45 0` |
 | 水池測試：小任務 | 同上，檔名換成 `water_mission.py` | 下潛 → 直走 → 轉 180° → 走回來 |
 | 鍵盤操控 | `docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py` | pygame 視窗，按鍵與安全機制見 [`keyboard.py`](tools/teleop/keyboard.py) 檔頭。可加 `--gain 0.3`（初始推力）、`--max-depth 0.25`（定深上限） |
 | 看相機畫面（只限實機） | `docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera/camera/color/image_raw` | 原始影像。topic 換成 `/detections/image` 是畫好偵測框的畫面，視窗左上的下拉選單也能切換 |
-| 過門流程測試（不需要 ROS） | `python3 mission/test_gate_pass.py` | 用簡化模型檢查流程邏輯與正負號，CI 也會跑 |
 | 行為樹測試 | `cd src/orca_mission && python3 -m pytest test` | 要有 py_trees（或在 `mission` 容器裡跑）。含用簡化模型跑完整過門的情境，CI 也會跑 |
 
 - 開視窗的功能（鍵盤操控、看畫面）要先在主機跑 `xhost +SI:localuser:root`；模擬的 `./run.sh` 已經跑過。
@@ -88,8 +85,8 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
   |---|---|
   | `logs/mission/<樹>_<時間>.csv` | 行為樹（`./mission.sh`） |
   | `logs/bag/<樹>_<時間>/` | rosbag（`./mission.sh`），跟 CSV 同名 |
-  | `logs/fc_adapter/*.csv` | 測試腳本、舊版過門 |
-- rosbag 只在跑行為樹時錄：實機和模擬的 `./mission.sh` 都是樹開始前開始錄，樹結束（含 Ctrl-C）、上鎖、船浮上水面後自動停止並收尾（最多等 30 秒），一次任務一個 `.mcap`，存在 `deploy/<跑法>/logs/bag/<樹>_<時間>/`，跟 `logs/mission/` 的 CSV 同名。內容是所有 topic（mavros、`/auv_control`、`/detections`、`/mission/status`、`/rosout` 的節點 log），實機約 4 GB／小時。影像只錄畫好框的 JPEG（`/detections/image/compressed`），相機的影像（原始、JPEG）都不錄。`docker compose up -d`、`./up.sh`、`./gate_pass.sh`（舊版）、水池測試腳本都不錄；不想錄用 `RECORD=0 ./mission.sh`。mission 結束後不到 1 秒就收尾好，接著就能用 Foxglove 開 `.mcap`（還在寫的檔打不開），或 `docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>` 回放（先 `docker compose down`）。
+  | `logs/fc_adapter/*.csv` | 水池測試腳本 |
+- rosbag 只在跑行為樹時錄：實機和模擬的 `./mission.sh` 都是樹開始前開始錄，樹結束（含 Ctrl-C）、上鎖、船浮上水面後自動停止並收尾（最多等 30 秒），一次任務一個 `.mcap`，存在 `deploy/<跑法>/logs/bag/<樹>_<時間>/`，跟 `logs/mission/` 的 CSV 同名。內容是所有 topic（mavros、`/auv_control`、`/detections`、`/mission/status`、`/rosout` 的節點 log），實機約 4 GB／小時。影像只錄畫好框的 JPEG（`/detections/image/compressed`），相機的影像（原始、JPEG）都不錄。`docker compose up -d`、`./up.sh`、水池測試腳本都不錄；不想錄用 `RECORD=0 ./mission.sh`。mission 結束後不到 1 秒就收尾好，接著就能用 Foxglove 開 `.mcap`（還在寫的檔打不開），或 `docker compose run --rm gui_tools ros2 bag play /bags/<資料夾>` 回放（先 `docker compose down`）。
 
 ### 其他
 
@@ -116,7 +113,6 @@ QGroundControl 開著就會自動連上（UDP 14550），joystick 要關掉，�
 | `docker/` | 各 image 的 Dockerfile |
 | `deploy/` | 每種跑法一個資料夾：compose 與機器上的服務設定 |
 | `tools/` | 水池測試腳本、鍵盤操控（`teleop/keyboard.py`）等不屬於 ROS package 的工具 |
-| `mission/` | 舊版自主流程（狀態機）：過門 `gate_pass.py`，在 `fc_adapter` 容器裡執行。行為樹版在 `src/orca_mission` |
 | `docs/` | 架構、操作、排錯紀錄 |
 
 之後會加的 package（用到時再建）：`orca_safety`（漏水、電池、kill switch、節點看門狗）、`orca_localization`、`orca_actuators`（電磁鐵、投放）、`orca_description`（URDF、TF）、`orca_bringup`（同一台機器上多個節點的 launch）。

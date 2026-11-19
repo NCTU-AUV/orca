@@ -25,7 +25,6 @@ SEED=7 WORLD=sauvc_final.sdf ./mission.sh <樹>       # 決賽主場地的隨機
 WORLD=orca_pool.sdf ./mission.sh smoke_test          # 動作測試（下潛、轉向、前進），空池，不需要門和相機
 UNDERWATER=0 ./mission.sh                            # 關掉水下效果（乾淨明亮的畫面）；UNDERWATER_STRENGTH=0.5 調強度
 RECORD=0 ./mission.sh                                # 不錄 rosbag
-./gate_pass.sh                                       # 舊版過門（狀態機 mission/gate_pass.py）
 ./referee_check.sh                                   # 驗收：規則事件（碰撞、掉球、上浮…）都做得出來、讀得到
 ./detect_sweep.sh                                    # 偵測驗證：每個道具在多遠偵測得到（水下效果開／關）
 ```
@@ -133,7 +132,7 @@ docker compose run --rm gui_tools python3 /orca/tools/teleop/keyboard.py   # --g
 
 ### 過門（有門、相機、偵測）
 
-行為樹版（[`src/orca_mission`](../../src/orca_mission/README.md)，流程寫在 `trees/gate_pass.yaml`）：
+行為樹（[`src/orca_mission`](../../src/orca_mission/README.md)，流程寫在 `trees/gate_pass.yaml`）：
 
 ```bash
 ./mission.sh                                      # SAUVC 2027 資格賽，開 Gazebo 視窗
@@ -151,15 +150,6 @@ WORLD=orca_pool.sdf ./mission.sh smoke_test       # 動作測試（下潛、轉�
 - 不想錄：`RECORD=0 ./mission.sh`。錄影設定在 `compose.yaml` 的 `recorder` 服務。
 - Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/orca_mission.json)（Foxglove 右上角的 layout 選單 → Import from file）。分頁「過門」有前視、底部畫好框的影像，行為樹節點／飛控模式／解鎖／有沒有看到門，門的偏離與框寬、深度、推力；分頁「飛控、log」有航向、`/mavros/state`、`/rosout`。`/mission/status` 是 JSON 字串，layout 裡帶的 User Script（`tools/foxglove/*.ts`）會把它和 `/detections` 拆成欄位。改了之後用 `python3 tools/foxglove/make_layout.py` 重新產生。
 
-舊版（狀態機 [`mission/gate_pass.py`](../../mission/gate_pass.py)，參數直接交給它）：
-
-```bash
-./gate_pass.sh                              # 資格賽門
-GUI=0 ./gate_pass.sh --pass-s 6
-```
-
-流程一樣：起 `fc_adapter`、`sim_cameras`、`object_detector` → 重開 `simulator` → 等就緒 → 在 `fc_adapter` 容器裡執行 `mission/gate_pass.py`。模擬裡不列實機的檢查清單，不用按 Enter。跑完容器繼續跑，再執行一次就是重跑；全部關掉用 `docker compose --profile vision down`。
-
 | 世界 | 內容 |
 |---|---|
 | `sauvc_qual.sdf`（`mission.sh` 的預設） | SAUVC 2027 資格賽：船從第 2 道的起點標記出發（船尾貼著牆），約 9.6 m 外是自水面吊掛 1 m 的資格賽門（偏右 0.2 m）。池底在門那裡約 1.62 m |
@@ -169,7 +159,7 @@ GUI=0 ./gate_pass.sh --pass-s 6
 - 有道具的世界，船都是 `models/orca_cam`：`models/orca` 原封不動併入，多一顆前視相機（640×480、15 Hz、水平視角 55.7°，跟實機 D435i 彩色的 `camera_info` 一致）、一顆朝下的底部相機（640×480、10 Hz、水平視角 70°，影像上方 = 船頭；實機規格還沒定），以及碰撞外框（只用來判斷碰撞，不算浮力）。
 - `sim_cameras` 服務（[`sim/gz_camera_bridge.py`](../../sim/gz_camera_bridge.py)）把 Gazebo 影像轉成跟實機一樣的 `/camera/camera/color/image_raw`、`camera_info`，底部是 `/bottom_camera/image_raw`、`camera_info`，轉之前先做水下成像的後處理（[`sim/underwater.py`](../../sim/underwater.py)）；`object_detector` 跟實機是同一個 RF-DETR 節點，兩台相機輪流推論。不需要 `ros_gz`。
 - 2026-11-12 實測（舊的 `orca_qgate.sdf`、`GUI=0`）：相機約 11～14 fps；RF-DETR 把資格賽門認成 `gate`（分數 0.6～0.95，流程兩類都接受）；連跑兩次都走完，Gazebo 真值顯示通過門平面時離門中心 1.3 cm。2027 世界的結果見 [world-2027.md](world-2027.md#驗收紀錄)。
-- 模擬裡 surge 0.2 約 0.8 m/s，盲走 8 秒會衝過門約 6 m（現在 `gate_pass.py` 的預設是 5 秒）。
+- 模擬裡 surge 0.2 約 0.8 m/s，盲走 8 秒會衝過門約 6 m（`gate_pass.yaml` 的 `pass_s` 預設是 5 秒）。
 
 ### QGroundControl（選用）
 
@@ -197,7 +187,7 @@ GUI=0 ./gate_pass.sh --pass-s 6
 | `deploy/sim/logs/sim/ardusub/ardusub.out` | ArduSub 的終端機輸出 |
 | `deploy/sim/logs/sim/ardusub/logs/*.BIN` | 飛控的 DataFlash log（高頻姿態、控制器目標與出力），用 pymavlink 或 MAVExplorer 讀 |
 | `deploy/sim/logs/sim/mavproxy/` | mavproxy 的 tlog |
-| `deploy/sim/logs/fc_adapter/*.csv` | 測試程式、舊版過門的紀錄 |
+| `deploy/sim/logs/fc_adapter/*.csv` | 水池測試程式的紀錄 |
 | `deploy/sim/logs/mission/*.csv` | 行為樹的紀錄 |
 | `deploy/sim/logs/bag/<樹>_<時間>/` | `./mission.sh` 每次執行錄的 rosbag（MCAP，影像只有畫好框的 JPEG），跟 CSV 同名 |
 | `deploy/sim/logs/referee/*.jsonl` | 裁判的事件與分數（`./mission.sh` 跑的跟 CSV 同名，其他用啟動時間）；`check_*.json` 是 `./referee_check.sh` 的結果 |
@@ -251,7 +241,6 @@ GUI=0 ./gate_pass.sh --pass-s 6
 | `tools/sim_detect/`、`deploy/sim/detect_sweep.sh` | 偵測驗證（`sim_sweep`、`detect_eval`） |
 | `deploy/sim/mission.sh` | 一個指令跑行為樹（預設過門） |
 | `tools/foxglove/` | 看 rosbag 用的 Foxglove layout（`orca_mission.json`，由 `make_layout.py` 產生） |
-| `deploy/sim/gate_pass.sh` | 一個指令跑舊版過門 |
 | `src/orca_bridge/` | mavros + `auv_adapter.py`，跟實機共用 |
 | `tools/pool_tests/` | 水池測試腳本 |
 

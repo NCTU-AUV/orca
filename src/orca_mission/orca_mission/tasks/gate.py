@@ -1,8 +1,7 @@
 """過門用的執行器：轉向對準（AlignTo）、平移對準（CenterGate）、接近（ApproachGate）。
 
-AlignTo 的邏輯跟 mission/gate_pass.py 的 ALIGN 相同，參數名稱與預設值也一樣。
-ApproachGate 跟 mission/gate_pass.py 的 APPROACH 不同：不看門框多寬，一直往前走到完全看不到門才結束
-（舊版門框寬 ≥ 畫面寬 × 0.7 就開始盲走）。
+ApproachGate 不看門框多寬：一直往前走到完全看不到門才結束（門框寬度到某個比例就盲走的做法，
+在水下畫面裡門框邊緣常被散射吃掉，寬度不可靠）。
 行為樹：
   trees/gate_pass.yaml：不轉向，航向從解鎖起就鎖住，對準只用 sway
     Dive → CenterGate → ApproachGate → Cruise（盲走過門）→ Hold（停）

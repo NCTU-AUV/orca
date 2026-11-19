@@ -1,7 +1,6 @@
 """離線測試用的平面模型：代替船、飛控、adapter、相機與偵測，不需要 ROS 和 Gazebo。
 
-跟 mission/test_gate_pass.py 的模型相同（數字也一樣），差別是這裡跑的是整套新架構：
-行為樹（YAML）→ TaskRunner → Shaper → 「飛控」，影像經 Perception 換算方位。
+跑的是整套架構：行為樹（YAML）→ TaskRunner → Shaper → 「飛控」，影像經 Perception 換算方位。
 
 - 航向：追目標航向，上限 60°/s；深度、前進、平移都是一階延遲
 - 遙測：深度、航向、模式、解鎖狀態 4 Hz（跟實機經 mavproxy 拿到的差不多）

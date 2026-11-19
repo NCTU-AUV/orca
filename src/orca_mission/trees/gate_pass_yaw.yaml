@@ -47,7 +47,7 @@ root:
 
     - type: Sequence
       name: 下水之後
-      timeout: 180      # 從解鎖後算，整段的上限（同 gate_pass.py 的 mission_timeout）
+      timeout: 180      # 從解鎖後算，整段的上限
       children:
         - type: Dive
           name: 下潛

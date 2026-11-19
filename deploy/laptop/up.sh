@@ -14,7 +14,7 @@
 # 改了 compose.yaml 要套用到已經在跑的容器：docker compose up -d <服務>
 #
 # - RPi 端要先設好（cam-relay、mavproxy 的 udpin 14560），見 docs/laptop-rpi-relay.md。
-# - 跑完接著開始任務：./mission.sh（行為樹）或 ./gate_pass.sh（舊版），兩個都會先跑這個腳本。
+# - 跑完接著開始任務：./mission.sh（行為樹），它會先跑這個腳本。
 # - 全部關掉：docker compose down。
 set -euo pipefail
 cd "$(dirname "$0")"

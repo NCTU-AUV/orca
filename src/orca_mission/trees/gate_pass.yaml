@@ -1,5 +1,5 @@
 # 過門（行為樹）。流程圖：gate_pass.md（render_tree 產生）
-# 跟 mission/gate_pass.py 的差別：不轉向對準。航向從解鎖起就鎖住（歸零時的船頭方向），對準只用左右平移。
+# 不轉向對準：航向從解鎖起就鎖住（歸零時的船頭方向），對準只用左右平移（轉向版見 gate_pass_yaw.yaml）。
 #
 #   ros2 run orca_mission mission gate_pass                   # 實機（會列檢查清單、等 Enter）
 #   ros2 run orca_mission mission gate_pass --no-checklist    # 模擬
@@ -45,7 +45,7 @@ root:
 
     - type: Sequence
       name: 下水之後
-      timeout: 180      # 從解鎖後算，整段的上限（同 gate_pass.py 的 mission_timeout）
+      timeout: 180      # 從解鎖後算，整段的上限
       children:
         - type: Dive
           name: 下潛

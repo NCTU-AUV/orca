@@ -2,8 +2,7 @@
 # 用 ./run.sh 啟動。實機的水池測試腳本不用改就能對模擬跑：
 #   docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_depth.py'
 # 過門（有門、相機、偵測的世界）：
-#   ./mission.sh                  行為樹版（src/orca_mission/trees/gate_pass.yaml，mission 服務）
-#   ./gate_pass.sh                舊版（mission/gate_pass.py，在 fc_adapter 容器裡跑）
+#   ./mission.sh                  行為樹（src/orca_mission/trees/gate_pass.yaml，mission 服務）
 #   sim_cameras、object_detector 在 vision profile（./run.sh 遇到有相機的世界會一起起），
 #   recorder 在 record profile、mission 在 mission profile，./run.sh 不會起它們
 # 偵測驗證（模擬畫面丟給 RF-DETR，量「哪個道具在多遠偵測得到」）：./detect_sweep.sh，見 tools/sim_detect/
@@ -76,7 +75,6 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ../../src:/opt/orca_ws/src:ro
       - ../../tools:/orca/tools:ro
-      - ../../mission:/orca/mission:ro
       - ./logs/fc_adapter:/logs
     stop_grace_period: 20s
     command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, sitl]
