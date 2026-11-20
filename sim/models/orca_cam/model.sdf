@@ -5,12 +5,12 @@
   有道具的世界檔 include 這個模型，名字一樣取 orca。
 
   相機：640x480、15 Hz、看到 60 m（泳池長 50 m，看得到另一頭的牆）。水平視角 55.7°（fx = 606 px），對齊實機 D435i 彩色 640x480 的
-  camera_info（docs/laptop-rpi-relay.md 的實測）。位置在船頭前緣中線，跟實機的安裝位置
-  不一定相同，之後量到再改 pose。
+  camera_info（docs/laptop-rpi-relay.md 的實測）。位置在壓克力艙前端外面、艙的軸心上（x = 0.205 m），
+  實機的安裝位置還沒量，之後量到再改 pose。
   Gazebo 的影像在 gz topic /orca/camera/image，由 sim/gz_camera_bridge.py 轉成 ROS。
 
   底部相機：640x480、10 Hz、水平視角 70°（實機的底部 USB 相機規格還沒定，之後換成實測值）。
-  裝在船底中線、船頭方向 0.1 m，朝正下方；影像上方 = 船頭、右方 = 右舷
+  裝在壓克力艙底下的中線（z = −0.115 m）、船頭方向 0.1 m，朝正下方（實機位置還沒量）；影像上方 = 船頭、右方 = 右舷
   （src/orca_mission/config/orca.yaml 照這個方向）。gz topic /orca/bottom_camera/image。
 
   水下效果（越遠越暗、偏藍、模糊、噪點）不是在 Gazebo 裡算的（Harmonic 的 ogre2 不支援 fog）：
@@ -21,8 +21,8 @@
   看不到 model://water 裡給 Gazebo 視窗看的水體霧；depth camera 本來就不含 particle。
 
   碰撞外框（bumper_link）：model://orca 唯一的 collision 是 main_body_buoyancy（0.6 x 0.2 x 0.2 的
-  浮力體），比實際的船小很多（機架寬 34 cm、推進器外緣到 ±29 cm），拿它判斷「有沒有碰到門」
-  會太寬鬆。這裡照機架與推進器的外形另外放一組 collision，並在上面掛 contact sensor：
+  浮力體），比實際的船窄很多（CAD 外框寬 48 cm），拿它判斷「有沒有碰到門」會太寬鬆。
+  這裡照 CAD 的外形另外放一組 collision，並在上面掛 contact sensor：
   船碰到任何東西都會發到 gz topic /orca/contacts（gz.msgs.Contacts，含對方 collision 的名稱），
   sim/referee.py 讀它。
   **浮力**：Buoyancy 會對有 collision 的 link 算浮力，外框的體積不能算進去。所以用到這個模型的
@@ -36,7 +36,7 @@
     </include>
 
     <link name="camera_link">
-      <pose>0.32 0 0 0 0 0</pose>
+      <pose>0.205 0 0.0064 0 0 0</pose>
       <!-- 很輕，不影響船的浮力與平衡；沒有 collision，不參與浮力計算 -->
       <inertial>
         <mass>0.01</mass>
@@ -79,7 +79,7 @@
     </joint>
 
     <link name="bottom_camera_link">
-      <pose>0.1 0 -0.155 0 0 0</pose>
+      <pose>0.1 0 -0.115 0 0 0</pose>
       <inertial>
         <mass>0.01</mass>
         <inertia><ixx>1e-5</ixx><iyy>1e-5</iyy><izz>1e-5</izz></inertia>
@@ -119,58 +119,63 @@
       <child>bottom_camera_link</child>
     </joint>
 
-    <!-- 碰撞外框：位置同 base_link。hull、frame 對應 model://orca 的兩個 visual，
-         thruster_N 對應八顆推進器（半徑 5 cm、長 11.3 cm）。 -->
+    <!-- 碰撞外框：位置同 base_link，形狀照 model://orca 的 CAD 網格簡化：tube = 壓克力艙（半徑 11 cm、長 40.8 cm），
+         side_panel_* = 兩側外殼的外框，thruster_N 對應八顆推進器（T200 外框：半徑 4.84 cm、長 11.27 cm）。 -->
     <link name="bumper_link">
       <inertial>
         <mass>0.01</mass>
         <inertia><ixx>1e-5</ixx><iyy>1e-5</iyy><izz>1e-5</izz></inertia>
       </inertial>
-      <collision name="hull">
-        <pose>0 0 0.115 0 0 0</pose>
-        <geometry><box><size>0.6 0.2 0.2</size></box></geometry>
+      <collision name="tube">
+        <pose>-0.0027 0 0.0064 0 1.5707963268 0</pose>
+        <geometry><cylinder><radius>0.11</radius><length>0.408</length></cylinder></geometry>
       </collision>
-      <collision name="frame">
-        <pose>0 0 -0.07 0 0 0</pose>
-        <geometry><box><size>0.6 0.34 0.14</size></box></geometry>
+      <collision name="side_panel_left">
+        <pose>0 0.1548 0 0 0 0</pose>
+        <geometry><box><size>0.5 0.1359 0.2834</size></box></geometry>
+      </collision>
+      <collision name="side_panel_right">
+        <pose>0 -0.1548 0 0 0 0</pose>
+        <geometry><box><size>0.5 0.1359 0.2834</size></box></geometry>
       </collision>
       <collision name="thruster_0">
-        <pose>0.15 0.237 0 0 0 0</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>0.055 0.193 0.0163 0 0 0</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_1">
-        <pose>0.15 -0.237 0 0 0 0</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>0.055 -0.193 0.0163 0 0 0</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_2">
-        <pose>-0.15 0.237 0 0 0 0</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>-0.055 0.193 0.0163 0 0 0</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_3">
-        <pose>-0.15 -0.237 0 0 0 0</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>-0.055 -0.193 0.0163 0 0 0</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_4">
-        <pose>0.2965 0.213 0 0 1.5707963268 -0.7853981634</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>0.2005 0.1633 -0.002 0 1.5707963268 -0.7853981634</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_5">
-        <pose>0.2965 -0.213 0 0 1.5707963268 0.7853981634</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>0.2005 -0.1633 -0.002 0 1.5707963268 0.7853981634</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_6">
-        <pose>-0.2965 0.213 0 0 1.5707963268 0.7853981634</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>-0.2005 0.1633 -0.002 0 1.5707963268 0.7853981634</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <collision name="thruster_7">
-        <pose>-0.2965 -0.213 0 0 1.5707963268 -0.7853981634</pose>
-        <geometry><cylinder><radius>0.05</radius><length>0.113</length></cylinder></geometry>
+        <pose>-0.2005 -0.1633 -0.002 0 1.5707963268 -0.7853981634</pose>
+        <geometry><cylinder><radius>0.0484</radius><length>0.1127</length></cylinder></geometry>
       </collision>
       <sensor name="contact" type="contact">
         <always_on>1</always_on>
         <contact>
-          <collision>hull</collision>
-          <collision>frame</collision>
+          <collision>tube</collision>
+          <collision>side_panel_left</collision>
+          <collision>side_panel_right</collision>
           <collision>thruster_0</collision>
           <collision>thruster_1</collision>
           <collision>thruster_2</collision>

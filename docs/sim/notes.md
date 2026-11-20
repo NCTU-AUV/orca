@@ -98,3 +98,21 @@
 - **DetachableJoint 的 child model 要寫在 parent 的 `<include>` 前面**，不然啟動時找不到（`Child Model ... could not be found`），球不會被固定。
 - **OpenCV 的版本**：orca-sim 的 numpy 是 apt 的 1.21；opencv-python-headless 4.7 之後的 `cv2.typing` 需要 numpy ≥ 1.22，import 會失敗，所以鎖在 4.6.0.66（`--no-deps`）。
 - **自訂的 SDF 元素**：`<orca:referee>`（`xmlns:orca` 宣告在 `<sdf>` 上）Gazebo 不認得、會略過，`sim/referee.py` 自己讀世界檔取設定。
+
+## CAD 船體、推力死區（2026-11-20）
+
+- **過門的平移對準（CenterGate）推不動船（已知問題，還沒修）**：`gate_pass` 的 CenterGate 送 `sway = sway_gain × offset_x`（`sway_gain` 0.8）。資格賽出發時船偏離門中線約 20 cm，`offset_x` 約 0.04，所以 sway 只有約 0.03。ArduSub 換成水平推進器的 PWM 是 sway × 400 µs，rosbag 的 `/mavros/rc/out` 實測通道 1～4 只偏離 1500 約 12 µs，落在 T200 的死區裡（16 V 時偏離 < 約 28 µs 推力為 0）。四顆水平推進器推力都是 0，船完全不動。鎖航向的修正也卡在死區，航向會慢慢漂，偏離量偶爾因為航向漂掉而變小。結果 CenterGate 大多 40 秒逾時照樣往前（`give_up_s`），ApproachGate 前進時的 sway 修正（約 ±0.025）也沒有作用，過門靠的是盲走。
+  - sway 與四顆水平推進器合起來的橫向推力（16 V）：
+
+    | sway | PWM 偏離 | 橫向推力 |
+    |---|---|---|
+    | 0.03（現在） | 12 µs | 0 N |
+    | 0.075 以下 | ≤ 30 µs | 0～0.5 N |
+    | 0.1 | 40 µs | 約 2 N |
+    | 0.15 | 60 µs | 約 5.5 N |
+  - 從 `af4e613`（推力改用 T200 推力表）開始就這樣，跟船體形狀無關：ArduSub 算 PWM 時不知道推進器裝在哪。之前推力是直線換算，sway 0.03 也有一點推力，對準約 3 秒。
+  - **實機很可能一樣**：實機的 T200／ESC 有同樣的死區，出發時的 sway 也只有 0.03 左右。
+  - 可能的修法：CenterGate、ApproachGate 需要修正時給 sway 一個下限（例如 0.1，約 2 N），或提高 `sway_gain`（但偏離接近門檻時 sway 還是會掉進死區）。會改到實機的過門行為，要下水確認。
+  - 怎麼查：rosbag 的 `/mavros/rc/out` 是飛控送給推進器的 PWM，通道 1～4 減 1500 都在 ±28 µs 以內就是卡在死區。
+- **比較改版前後的模擬結果時，推力模型要一樣**：拿推力表之前（直線換算）跑的紀錄當基準，會把死區造成的差異誤當成這次修改造成的。用 `git log` 對紀錄的時間（`logs/mission/` 檔名就是時間）。
+- **船體改成 CAD 之後**：外觀與推進器位置由 `tools/cad/sldasm_mesh.py` 從 SolidWorks 組合件產生（`.SLDASM` 裡存有顯示用的網格與各零件的變換，不需要 SolidWorks）。船變短（含推進器長 0.50 m、寬 0.48 m），`sim/referee.py` 的 `FOOTPRINT`、`HALF_LENGTH` 與資格賽的出發位置（船尾貼牆，`sauvc_qual.sdf` 的 arena）要跟著改。質心、浮心、質量、慣量 CAD 裡沒有（沒有電子艙內容物），還是舊的估計值。

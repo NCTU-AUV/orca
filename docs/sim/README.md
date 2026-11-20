@@ -261,8 +261,9 @@ Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/
 
 **模擬與實機的差異**
 
-- 船的質量、浮力、阻力、推進器位置沿用 [NCTU-AUV/SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 的估計值，而且模型沒有推進器的反應延遲。結果是模擬比實機「好控」：定深、轉向的過衝比實機小很多（轉 90° 過衝約 1.4°，實機 9～13°），定深時抵銷浮力的垂直出力約 −13 µs（實機約 −50 µs）。**模擬適合驗證流程、方向與邏輯，不適合拿來調 PID。**
+- 船的外觀、推進器位置取自 CAD（ORCA AUV 5.0 的「外殼重作版組合件」）；質量、慣量、浮力、阻力仍沿用 [NCTU-AUV/SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 的估計值，質心假設在 CAD 外框的中心（都還沒實測），而且模型沒有推進器的反應延遲。結果是模擬比實機「好控」：定深、轉向的過衝比實機小很多（轉 90° 過衝約 1.4°，實機 9～13°），定深時抵銷浮力的垂直出力約 −13 µs（實機約 −50 µs）。**模擬適合驗證流程、方向與邏輯，不適合拿來調 PID。**
 - 推進器的 PWM → 推力查 T200 的公開推力表（自寫的 `orca::ThrustCurve` 外掛，16 V），有跟實機一樣的死區（約 1472～1528 µs 推力為 0）。鎖航向、定深的誤差小時 PWM 會落在死區，收斂比直線換算時慢。電壓要跟實機下水時的電池電壓一致（`model.sdf` 的 `<voltage>`）。細節見 [notes.md](notes.md)。
+- **過門的平移對準（CenterGate）大多推不動船**：sway 只有約 0.03，換成 PWM 只偏離中位約 12 µs，落在 T200 的死區裡，推力是 0；大多 40 秒逾時照樣往前，過門靠盲走。實機很可能一樣，還沒修。細節與修法見 [notes.md](notes.md) 的「CAD 船體、推力死區」。
 - 船的 yaw 阻尼很小：MANUAL 下 r = 300 約 170°/s。受控模式（STABILIZE、DEPTH_HOLD）有 `ATC_RATE_WPY_MAX` 60°/s 限住，跟實機一樣。
 - 飛控讀到的深度比 Gazebo 的真實深度多約 2.5%：SITL 用海水密度算水壓，飛控用淡水換回深度。
 - 飛控回報的深度以約 1 cm 為單位跳動。
@@ -295,7 +296,8 @@ Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/
 | `firmware/ardusub/sitl.parm` | 飛控參數（取自實機）與 SITL 模擬硬體參數 |
 | `sim/worlds/orca_pool.sdf` | 空池世界（25 × 16 m、深 1.6 m，水面 z = 0） |
 | `sim/worlds/sauvc_qual.sdf`、`sauvc_final.sdf` | SAUVC 2027 資格賽、決賽主場地（見 [world-2027.md](world-2027.md)） |
-| `sim/models/pool/`、`sim/models/orca/` | 舊泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin） |
+| `sim/models/pool/`、`sim/models/orca/` | 舊泳池、Orca（船體、浮力、阻力、8 顆推進器、IMU、ArduPilotPlugin；外觀是 `meshes/*.stl`） |
+| `tools/cad/sldasm_mesh.py` | SolidWorks 組合件 → `sim/models/orca/meshes/*.stl` 與各零件、推進器的姿態（不需要 SolidWorks） |
 | `sim/models/orca_cam/` | Orca + 前視、底部相機（含 depth camera）+ 碰撞外框 |
 | `sim/models/pool_2027/`、`water/` | 50 × 25 m 泳池、水面與水體霧 |
 | `sim/models/` 其他 | 2027 的道具：`gate`、`q_gate`、`orange_flare`、`flare_red/yellow/blue`、`drum_red/blue/red_pinger`、`target_mat`、`surfacing_square`、`start_zone`、`start_marker`、`dropper_ball` |
@@ -310,6 +312,7 @@ Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/
 
 ## 之後要加東西
 
+- CAD 改版（外殼、推進器位置）：從雲端硬碟下載新的 `.SLDASM`，跑 `python3 tools/cad/sldasm_mesh.py <組合件.SLDASM> sim/models/orca/meshes`。它會重寫 STL，並印出各零件在機體座標的 pose、各推進器的中心與軸向，手動更新 `sim/models/orca/model.sdf` 的 `<visual>`、`thruster_N` 的 `<pose>`，以及 `sim/models/orca_cam/model.sdf` 的碰撞外框。推力方向沿用原本 joint 軸的正負號，`ArduPilotPlugin` 的對應與 `<multiplier>` 就不用改。零件名稱換了要用 `--name 零件名=檔名` 指定 STL 檔名。
 - 新的世界：`<include>` `pool_2027`、`water`（夾在 `UNDERWATER:BEGIN`／`END` 之間）、道具與 `orca_cam`，Buoyancy 一定要 `<enable>orca::base_link</enable>`（原因見 `models/orca_cam` 的註解）。`sauvc_qual.sdf`、`sauvc_final.sdf` 可以當範本。
 - 新的計分規則：`sim/referee.py`，再到 `sim/tests/referee_check.py` 加一項驗收。
 - ROS 橋接、視覺、任務層：在 `deploy/sim/compose.yaml` 新增服務（ROS 2 Humble、host network、`ROS_LOCALHOST_ONLY=1`），不改 `simulator`、`fc_adapter` 的埠與 topic。

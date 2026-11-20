@@ -101,7 +101,7 @@ docker compose logs -f fc_adapter        # mavros、auv_adapter 的輸出
 | `ml/` | 模型訓練的 notebook、設定、下載權重的腳本。權重放在 GitHub Releases，資料集不放進 repo |
 | `docker/` | 各 image 的 Dockerfile |
 | `deploy/` | 每種跑法一個資料夾：compose 與機器上的服務設定。`deploy/common.sh` 是各跑法的腳本共用的函式（等待就緒、場次） |
-| `tools/` | 水池測試腳本、鍵盤操控（`teleop/keyboard.py`）、系統辨識（`sysid/`）等不屬於 ROS package 的工具 |
+| `tools/` | 水池測試腳本、鍵盤操控（`teleop/keyboard.py`）、系統辨識（`sysid/`）、CAD 轉模擬網格（`cad/`）等不屬於 ROS package 的工具 |
 | `docs/` | 架構、操作、排錯紀錄；`docs/archive/` 是已完成的計畫書、需求書 |
 
 之後會加的 package（用到時再建）：`orca_safety`（漏水、電池、kill switch、節點看門狗）、`orca_localization`、`orca_actuators`（電磁鐵、投放）、`orca_description`（URDF、TF）、`orca_bringup`（同一台機器上多個節點的 launch）。

@@ -336,7 +336,7 @@ class Check(Node):
         # 起點那面牆邊的池底只有 1.28 m 深：下潛只推 0.7 秒（約到 0.7 m），推太久會碰到池底（資格賽失敗）
         P = self.props
         gate = P['q_gate_2']
-        start = self.vehicle_arena() or (0.37, 12.2, -0.21)
+        start = self.vehicle_arena() or (0.248, 12.2, -0.21)
         home = (start[0], start[1], -0.2)
 
         def go_home():

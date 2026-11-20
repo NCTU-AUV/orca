@@ -77,8 +77,8 @@ SIM_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ---- 尺寸（要跟 sim/models 一致）
 VEHICLE = 'orca'
-FOOTPRINT = [(0.372, 0.29), (0.372, -0.29), (-0.372, 0.29), (-0.372, -0.29)]    # 含推進器的外緣 [m]
-HALF_LENGTH = 0.372
+FOOTPRINT = [(0.25, 0.242), (0.25, -0.242), (-0.25, 0.242), (-0.25, -0.242)]     # 含推進器的外緣 [m]（CAD 外框，見 model://orca）
+HALF_LENGTH = 0.25
 GATE_HALF_WIDTH = 0.75          # 兩柱中心距的一半（gate、q_gate 都是 150 cm）
 GATE_HEIGHT = 1.48              # 導航門橫桿底下的淨高（原點在池底）
 Q_GATE_DEPTH = 1.0              # 資格賽門的柱子往下多深（原點在水面）
