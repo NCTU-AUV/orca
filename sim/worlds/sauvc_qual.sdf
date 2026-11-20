@@ -15,7 +15,7 @@
     道具的 pose 都寫 relative_to="arena"，直接對照官方圖。
 
   要換出發位置：改 <frame name="arena"> 的 pose。船在場地座標 (xs, ys)、船頭朝 arena +x 時，
-  pose = (-xs, -ys, 0)。現在 xs = 0.37（船尾的推進器剛好貼著牆，一開始就有「碰牆」）、
+  pose = (-xs, -ys, 0)。現在 xs = 0.248（船尾的外殼剛好貼著牆，一開始就有「碰牆」）、
   ys = 12.2（第 2 道，比標記中心偏左 0.2 m，讓對準那一步有事可做）。
   sim/referee.py 會自己挑離出發位置最近的起點標記與資格賽門當這次的目標。
 
@@ -98,7 +98,7 @@
     <orca:referee mode="qualification"/>
 
     <frame name="arena">
-      <pose>-0.37 -12.2 0 0 0 0</pose>
+      <pose>-0.248 -12.2 0 0 0 0</pose>
     </frame>
 
     <include>
