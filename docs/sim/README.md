@@ -263,6 +263,7 @@ Foxglove 的 layout：[`tools/foxglove/orca_mission.json`](../../tools/foxglove/
 
 - 船的外觀、推進器位置取自 CAD（ORCA AUV 5.0 的「外殼重作版組合件」）；質量、慣量、浮力、阻力仍沿用 [NCTU-AUV/SAUVC-Simulation](https://github.com/NCTU-AUV/SAUVC-Simulation) 的估計值，質心假設在 CAD 外框的中心（都還沒實測），而且模型沒有推進器的反應延遲。結果是模擬比實機「好控」：定深、轉向的過衝比實機小很多（轉 90° 過衝約 1.4°，實機 9～13°），定深時抵銷浮力的垂直出力約 −13 µs（實機約 −50 µs）。**模擬適合驗證流程、方向與邏輯，不適合拿來調 PID。**
 - 推進器的 PWM → 推力查 T200 的公開推力表（自寫的 `orca::ThrustCurve` 外掛，16 V），有跟實機一樣的死區（約 1472～1528 µs 推力為 0）。鎖航向、定深的誤差小時 PWM 會落在死區，收斂比直線換算時慢。電壓要跟實機下水時的電池電壓一致（`model.sdf` 的 `<voltage>`）。細節見 [notes.md](notes.md)。
+- **過門的平移對準（CenterGate）大多推不動船**：sway 只有約 0.03，換成 PWM 只偏離中位約 12 µs，落在 T200 的死區裡，推力是 0；大多 40 秒逾時照樣往前，過門靠盲走。實機很可能一樣，還沒修。細節與修法見 [notes.md](notes.md) 的「CAD 船體、推力死區」。
 - 船的 yaw 阻尼很小：MANUAL 下 r = 300 約 170°/s。受控模式（STABILIZE、DEPTH_HOLD）有 `ATC_RATE_WPY_MAX` 60°/s 限住，跟實機一樣。
 - 飛控讀到的深度比 Gazebo 的真實深度多約 2.5%：SITL 用海水密度算水壓，飛控用淡水換回深度。
 - 飛控回報的深度以約 1 cm 為單位跳動。
