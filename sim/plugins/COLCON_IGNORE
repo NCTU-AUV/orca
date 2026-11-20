@@ -1,0 +1,1 @@
+# colcon 跳過這個資料夾：gz 外掛由 docker/sim.Dockerfile 直接用 cmake 編，需要 gz-sim8，CI 的 ros:humble 沒有。
