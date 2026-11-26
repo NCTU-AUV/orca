@@ -4,7 +4,7 @@
 
 | 層 | 誰負責 | 頻率 | 內容 |
 |---|---|---|---|
-| 內迴路 | ArduSub（飛控 CUAV V5） | 約 400 Hz | 姿態估測（EKF3）、姿態與定深控制、8 顆推進器的推力分配 |
+| 內迴路 | ArduSub（飛控 AET-H743-Basic） | 約 400 Hz | 姿態估測（EKF3）、姿態與定深控制、8 顆推進器的推力分配 |
 | 介面 | `orca_bridge`（mavros + `auv_adapter.py`） | 20 Hz 送搖桿指令 | `/auv_control` 轉成 MAVLink：模式、解鎖、六自由度 effort、目標深度、目標航向 |
 | 感知 | `orca_perception` | 跟相機同步 | 影像 → `/detections` |
 | 決策 | `orca_mission`（py_trees） | 行為樹 10 Hz、指令 20 Hz | 偵測結果 + 飛控狀態 → `/auv_control`。任務層（行為樹：順序、重試、逾時、就緒檢查、歸零、解鎖）與執行層（TaskRunner + 執行器：送目標深度、目標航向、正規化 surge／sway）分開，見 [src/orca_mission/README.md](../src/orca_mission/README.md) |
