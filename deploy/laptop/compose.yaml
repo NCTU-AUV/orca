@@ -95,7 +95,8 @@ services:
   # 不錄：未壓縮的影像（sensor_msgs/Image，約 100 GB／小時）。
   # 錄：front_camera 轉發的原始 JPEG（/camera/camera/color/image_raw/compressed，RPi 送來的、不重新壓縮，
   # 每秒約 1.3 MB）、object_detector 畫好框的 JPEG（/detections/image/compressed，每秒約 1.1 MB），
-  # 加上 mavros、/auv_control、/detections、/rosout、/session/marker 等，合計約 9 GB／小時。
+  # 加上 mavros、/auv_control、/detections、/rosout、/session/marker 等，合計約 9 GB／小時（相機 30 fps 時量的）。
+  # 相機改成 15 fps 後兩路 JPEG 約減半，估計合計約 5 GB／小時，未實測。
   recorder:
     <<: [*ros, *base]
     restart: unless-stopped

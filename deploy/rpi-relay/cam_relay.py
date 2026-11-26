@@ -16,8 +16,10 @@ RPi 上不跑 ROS，只負責把相機「接出來」。筆電主動連進來（
 網路比相機慢時直接丟幀：送出端永遠只送最新的一幀，延遲不會累積。
 
 用法（在 RPi 上）：
-    .venv/bin/python cam_relay.py                     # 640x480@30, JPEG 品質 80
-    .venv/bin/python cam_relay.py --size 1280x720 --fps 15
+    .venv/bin/python cam_relay.py                     # 640x480@15, JPEG 品質 80
+    .venv/bin/python cam_relay.py --fps 30            # 要 30 fps 時
+
+前視相機固定 15 fps（偵測跟著相機的幀率），原因見 docs/architecture.md 的「幀率」。
 """
 
 import argparse
@@ -190,7 +192,7 @@ class Server:
 def main():
     p = argparse.ArgumentParser(description='RealSense color -> JPEG over TCP (for cam_bridge)')
     p.add_argument('--size', default='640x480', help='彩色解析度，例如 640x480、848x480、1280x720')
-    p.add_argument('--fps', type=int, default=30, help='相機幀率（6/15/30/60，依解析度而定）')
+    p.add_argument('--fps', type=int, default=15, help='相機幀率（6/15/30/60，依解析度而定）。預設 15，見 docs/architecture.md')
     p.add_argument('--quality', type=int, default=80, help='JPEG 品質 1-100')
     p.add_argument('--port', type=int, default=5600)
     a = p.parse_args()
