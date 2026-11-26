@@ -101,7 +101,7 @@ docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera
 ### rosbag 錄什麼
 
 - 除了未壓縮的影像（`sensor_msgs/Image`）以外的全部 topic：mavros、`/auv_control`、`/detections`、`/mission/status`、`/session/marker`、`/rosout`（節點的 log，包括鍵盤操控的模式切換、解鎖、歸零、GAIN 變化），以及原始 MAVLink（`/uas1/mavlink_source`）。
-- 相機錄兩路 JPEG：RPi 送來的原始 JPEG（`/camera/camera/color/image_raw/compressed`，不重新壓縮），以及畫好框的 JPEG（`/detections/image/compressed`）。估計約 9 GB／小時：兩路 JPEG 實測每秒約 1.3 MB 和 1.1 MB，其他 topic 很小。
+- 相機錄兩路 JPEG：RPi 送來的原始 JPEG（`/camera/camera/color/image_raw/compressed`，不重新壓縮），以及畫好框的 JPEG（`/detections/image/compressed`）。估計約 9 GB／小時：兩路 JPEG 實測每秒約 1.3 MB 和 1.1 MB（相機 30 fps 時），其他 topic 很小。相機改成 15 fps 後兩路 JPEG 約減半，估計約 5 GB／小時，還沒實測。
 - 要改錄哪些 topic 看 `compose.yaml` 的 `recorder`。
 - mavros 的遙測（姿態、IMU、深度、馬達輸出、電池）是 20 Hz（見下面的「遙測頻率」）。bag 拿來看全貌、找段落、對照影像；系統辨識的主要資料是飛控的 DataFlash（`.BIN`）。
 
@@ -171,7 +171,7 @@ docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera
 
 ### 磁碟
 
-- 估計約 9 GB／小時。筆電還有約 528 GB，一次下水 3 小時的話大約夠 19 個場次。
+- 估計約 9 GB／小時（相機 30 fps 時；15 fps 估計約 5 GB／小時）。筆電還有約 528 GB，一次下水 3 小時的話大約夠 19 個場次（15 fps 約 35 個）。
 - 不自動刪除。快滿之前把場次資料夾搬到外接硬碟，確認搬過去的檔打得開，再刪掉筆電上的。`logs/` 底下有容器以 root 寫的檔案，刪除要 `sudo`。
 
 ### 模擬的錄法不一樣
@@ -179,6 +179,8 @@ docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera
 模擬（`deploy/sim`）目前還是一次任務錄一個 bag（`deploy/sim/logs/bag/`），沒有場次，標記不會寫成 `markers.csv`（bag 裡還是有 `/session/marker`）。場次相關的腳本（[`deploy/common.sh`](../deploy/common.sh)、[`src/orca_session`](../src/orca_session)）寫成跟跑法無關，之後要統一實機和模擬的格式時，模擬可以直接用。
 
 ## 實測數字（2026-11-12）
+
+當時 `cam_relay.py` 是 30 fps。2026-11-26 起預設改成 15 fps（原因見 [architecture.md 的「幀率」](architecture.md#幀率)），下面的 fps 會變成約一半，頻寬也約減半；延遲不受影響。改完還沒重測。
 
 - `cam_bridge`：29 fps，約 3 Mbit/s（640×480 JPEG 品質 80），拍攝到筆電收到約 3 ms。`camera_info` 內參 fx ≈ 606、cx ≈ 320。D435i 要接在 RPi 的 USB 3。
 - `detector`（筆電 RTX 4050，FP32）：約 27 fps，推論 37 ms，拍攝到 `/detections` 約 60 ms。
