@@ -39,7 +39,7 @@ ONNX（`model.export()`，輸入 `[1,3,704,704]`，輸出 `dets [1,300,4]`、`la
 - 25W 模式把 GPU 鎖在 408 MHz，一定要切 MAXN（`sudo nvpmodel -m 0`）並跑 `sudo jetson_clocks`。這台目前刷的不是 Super 版，沒有 40W／MAXN_SUPER（1173 MHz）。
 - 匯出 ONNX 只需要 CPU 版 torch；PyPI 的 aarch64 torch 會拉 CUDA 13 的套件，在 Jetson 上用不到。
 - 前視相機固定 15 fps（見 [docs/architecture.md](../../docs/architecture.md#幀率)）。
-- 這次的推論、串流腳本只在 Jetson 的 `~/rfdetr_jetson/`，還沒收進 repo；Jetson 版的偵測 Dockerfile 也還沒寫。
+- 上面是 `~/rfdetr_jetson/` 的獨立腳本量的。repo 裡的 Jetson 版（`deploy/jetson`，TensorRT Python API、numpy 前後處理）見 [docs/jetson.md](../../docs/jetson.md#偵測tensorrt)。
 
 ## 在本機跑
 

@@ -40,7 +40,8 @@ x-base: &base
       orca.build-hash: ${ORCA_BASE_HASH:-}
 
 services:
-  # D435i 彩色 640x480@30（跟筆電轉接時一樣，下游的相機參數不用改）。深度先不開：
+  # D435i 彩色 640x480@15（解析度跟筆電轉接時一樣，下游的相機參數不用改；15 fps 的理由見
+  # docs/architecture.md 的「幀率」）。深度先不開：
   # 用不到，而且 recorder 會把沒壓縮的深度影像錄進去。
   # privileged + /dev：USB 相機重新列舉（拔插、librealsense 重設）後裝置節點會變，要整個 /dev 才跟得上
   camera:
@@ -63,7 +64,7 @@ services:
       - enable_infra2:=false
       - enable_gyro:=false
       - enable_accel:=false
-      - rgb_camera.color_profile:=640,480,30
+      - rgb_camera.color_profile:=640,480,15
 
   # RF-DETR（TensorRT）：影像 → /detections、/detections/image（畫好框；.../compressed 是 JPEG）。
   # weights 給 ONNX，節點載入這台對應的引擎（rfdetr-large.<GPU>.trt<版本>.fp16.engine），

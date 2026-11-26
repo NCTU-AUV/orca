@@ -37,7 +37,7 @@ AUV 獨自在水裡時沒有人能按 Ctrl-C，出事時靠三層讓船上鎖、
 - **在哪裡設定**：只在相機來源設定，偵測與決策的程式不用改。
   - 現行（RPi 轉接）：[`deploy/rpi-relay/cam_relay.py`](../deploy/rpi-relay/cam_relay.py) 的 `--fps`（預設 15）。
   - 模擬：[`sim/models/orca_cam/model.sdf`](../sim/models/orca_cam/model.sdf) 前視相機 15 Hz。
-  - Jetson（未建）：`realsense2_camera` 的參數 `rgb_camera.color_profile: 640x480x15`。
+  - Jetson：[`deploy/jetson/compose.yaml`](../deploy/jetson/compose.yaml) 的 `camera` 服務，`rgb_camera.color_profile:=640,480,15`。
 - 確認實際幀率：`docker compose logs -f object_detector` 每 5 秒印一次 fps。
 
 ## 部署
