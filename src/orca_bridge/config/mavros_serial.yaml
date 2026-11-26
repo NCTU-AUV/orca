@@ -2,8 +2,9 @@
 # 三份設定只差 fcu_url。/** 表示套用到 mavros 底下的所有節點
 /**:
   ros__parameters:
-    # 飛控以 USB 直接接到這台。尚未實測：裝置名稱與鮑率要在實機上確認
-    fcu_url: "serial:///dev/ttyACM0:115200"
+    # 飛控（AET-H743-Basic）以 USB 直接接到 Jetson。用 by-id 的固定名稱：ttyACM 的編號會隨插拔順序變。
+    # USB 有兩個序列埠，if00 是 SERIAL0（MAV1_*），if02 留給別的用途。USB CDC 不看鮑率，115200 只是格式需要
+    fcu_url: "serial:///dev/serial/by-id/usb-AET_AET-H743-Basic_2F0043001651333235363936-if00:115200"
     gcs_url: ""
 
     # mavros 自己的 system id。ArduSub 只接受 system id 等於 MAV_GCS_SYSID（255）

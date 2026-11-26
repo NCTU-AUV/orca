@@ -8,8 +8,8 @@ NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的自主水下載具 **Orca**
                                                    orca_mission（行為樹，py_trees）
                                                                                      │ /auv_control
                                                                                      v
-                     ArduSub（CUAV V5）<── mavros <── orca_bridge（auv_adapter）
-                     姿態、定深內迴路、推力分配
+                    ArduSub（AET-H743）<── mavros <── orca_bridge（auv_adapter）
+                    姿態、定深內迴路、推力分配
 ```
 
 姿態與定深的閉迴路、推力分配都交給飛控上的 ArduSub。上層（ROS 2 Humble）只送六自由度 effort、目標深度、目標航向，介面是 [`orca_msgs/AuvControl`](src/orca_msgs/msg/AuvControl.msg)。整體設計見 [docs/architecture.md](docs/architecture.md)。
