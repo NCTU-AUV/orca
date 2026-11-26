@@ -34,6 +34,7 @@ from gz.transport13 import Node as GzNode
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Empty, String
+from std_srvs.srv import SetBool
 
 SIM_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, SIM_DIR)
@@ -78,7 +79,7 @@ class Check(Node):
         self.create_subscription(String, '/sim/referee/events', self.on_event, latched)
         self.create_subscription(String, '/sim/referee/state', self.on_state, 10)
         self.pub_reset = self.create_publisher(Empty, '/sim/referee/reset', 10)
-        self.pub_release = self.create_publisher(Empty, '/ball_dropper/release', 10)
+        self.dropper = self.create_client(SetBool, '/ball_dropper/set_hold')
         self.announced = None
         self.create_subscription(String, '/comms/flare_order', self.on_order, QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
@@ -114,6 +115,19 @@ class Check(Node):
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             rclpy.spin_once(self, timeout_sec=0.02)
+
+    def release_ball(self):
+        """呼叫 /ball_dropper/set_hold false（sim_dropper），等回覆最多 5 秒。"""
+        if not self.dropper.wait_for_service(timeout_sec=5.0):
+            self.record('放球服務 /ball_dropper/set_hold', False, 'sim_dropper 沒在跑')
+            return
+        future = self.dropper.call_async(SetBool.Request(data=False))
+        end = time.monotonic() + 5.0
+        while not future.done() and time.monotonic() < end:
+            rclpy.spin_once(self, timeout_sec=0.02)
+        res = future.result() if future.done() else None
+        self.record('放球服務 /ball_dropper/set_hold 回覆成功', bool(res and res.success),
+                    res.message if res else '5 秒沒回覆')
 
     # ---- 座標：arena ⇄ 世界
     def to_world(self, x, y):
@@ -282,8 +296,8 @@ class Check(Node):
         drum_pts = {'drum_blue': 30, 'drum_red_pinger': 50, 'drum_red': 10}[kind]
         self.teleport(drum[0], drum[1], -1.2, math.pi / 2)
         self.spin(0.5)
-        self.pub_release.publish(Empty())
-        self.expect('放球指令（ROS /ball_dropper/release）→ 球離開船', 'ball_released', 5.0)
+        self.release_ball()
+        self.expect('放球指令（ROS /ball_dropper/set_hold false）→ 球離開船', 'ball_released', 5.0)
         self.expect(f'球掉進 drum_3（{kind}）並留在裡面 {drum_pts} 分', 'ball_in_drum', 25.0, drum=kind, points=drum_pts)
 
         # Surfacing Square：在框內上浮、沒碰到框

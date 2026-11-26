@@ -3,7 +3,7 @@
 兩種：
 - TaskAction：包一個執行器（tasks/），透過 TaskRunner 的 start／status／cancel 操作。
   被中斷（逾時、上層改走別條路）時 py_trees 會呼叫 terminate(INVALID)，這裡就取消執行器。
-- 任務層節點：WaitReady、Confirm、Zero、Arm、Finish、Seen。歸零、解鎖、切模式只有這些能做。
+- 任務層節點：WaitReady、Confirm、Zero、Arm、Finish、Seen、DropBall。歸零、解鎖、切模式、放球只有這些能做。
 
 節點透過 Context 拿資料、下指令；Context 由 node.py 提供（測試時用假的）。
 """
@@ -24,13 +24,15 @@ class Context:
     snapshot    () → 這一次 tick 的 Snapshot
     zero        () → 物件，有 done()、result() → (成功與否, 訊息)；呼叫 /auv_adapter/zero
     zero_here   () → None；歸零成功後馬上呼叫，跟 adapter 同時記零點
+    dropper     (hold: bool) → 物件，介面同 zero；呼叫 /ball_dropper/set_hold
     interactive 是否要人確認檢查清單（模擬時 false）
     log         (str) → None
     """
 
-    def __init__(self, runner=None, snapshot=None, zero=None, zero_here=None,
+    def __init__(self, runner=None, snapshot=None, zero=None, zero_here=None, dropper=None,
                  interactive=False, log=print):
         self.runner, self.snapshot, self.zero, self.zero_here = runner, snapshot, zero, zero_here
+        self.dropper = dropper
         self.interactive, self.log = interactive, log
 
 
@@ -82,7 +84,7 @@ class TaskAction(Leaf):
 
 class WaitReady(Leaf):
     """等到開始條件都成立。逾時用 YAML 的 timeout 設（中斷時會印出還缺什麼）。"""
-    PARAMS = {'cameras': [], 'detections': False, 'disarmed': True}
+    PARAMS = {'cameras': [], 'detections': False, 'disarmed': True, 'dropper': False}
 
     def missing(self, snap):
         p = self.params
@@ -98,6 +100,9 @@ class WaitReady(Leaf):
                 out.append(f'相機 {cam} 沒有 camera_info')
         if p['detections'] and snap.now - snap.detections_t > 2.0:
             out.append('收不到 /detections（object_detector 在跑嗎？）')
+        if p['dropper'] and snap.dropper_holding is not True:
+            out.append('放球機構沒回報吸住（/ball_dropper/holding；ball_dropper 在跑嗎？球裝好了嗎？）'
+                       if snap.dropper_holding is None else '放球機構是放開的（球裝好、吸住了嗎？）')
         return out
 
     def update(self):
@@ -216,6 +221,41 @@ class Seen(Leaf):
         return BtStatus.SUCCESS if s else BtStatus.FAILURE
 
 
+class DropBall(Leaf):
+    """放球：呼叫 /ball_dropper/set_hold false，確認回報放開之後原地停 wait_s 秒（讓球掉下去）。
+
+    這段時間 TaskRunner 維持最後的目標深度、航向，推力 0。
+    服務沒回覆、回覆失敗、/ball_dropper/holding 在 confirm_s 秒內沒變成放開：失敗。
+    """
+    PARAMS = {'wait_s': 2.0, 'confirm_s': 2.0}
+
+    def initialise(self):
+        self.call = self.ctx.dropper(False)
+        self.t_ok = None
+
+    def update(self):
+        snap, p = self.ctx.snapshot(), self.params
+        if self.t_ok is None:
+            if not self.call.done():
+                self.feedback_message = '等 /ball_dropper/set_hold'
+                return BtStatus.RUNNING
+            ok, message = self.call.result()
+            if not ok:
+                return self.fail(f'放球失敗：{message}')
+            self.t_ok = snap.now
+            self.ctx.log(f'--- 放球：{message}')
+        waited = snap.now - self.t_ok
+        if snap.dropper_holding is not False:
+            if waited > p['confirm_s']:
+                return self.fail('/ball_dropper/holding 沒有變成放開')
+            self.feedback_message = '等放球機構回報放開'
+            return BtStatus.RUNNING
+        if waited < p['wait_s']:
+            self.feedback_message = f'放開了，停 {p["wait_s"] - waited:.1f} s'
+            return BtStatus.RUNNING
+        return BtStatus.SUCCESS
+
+
 class Timeout(py_trees.decorators.Decorator):
     """跟 py_trees.decorators.Timeout 一樣，但時間取自 Snapshot.now（離線測試可以快轉）。"""
 
@@ -241,4 +281,4 @@ class Timeout(py_trees.decorators.Decorator):
         return self.decorated.status
 
 
-BEHAVIOURS = {cls.__name__: cls for cls in (WaitReady, Confirm, Zero, Arm, Finish, Seen)}
+BEHAVIOURS = {cls.__name__: cls for cls in (WaitReady, Confirm, Zero, Arm, Finish, Seen, DropBall)}

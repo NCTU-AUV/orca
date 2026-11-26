@@ -17,7 +17,7 @@ jobs:
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
       - name: python syntax
-        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py deploy/rpi-relay/cam_relay.py sim/*.py sim/tests/*.py tools/sim/*.py tools/sim_detect/*.py
+        run: python3 -m py_compile tools/pool_tests/*.py tools/teleop/*.py tools/hw_tests/*.py deploy/rpi-relay/cam_relay.py sim/*.py sim/tests/*.py tools/sim/*.py tools/sim_detect/*.py
       # 隨機佈局（tools/sim/layout.py）：照規則抽、同一個 seed 結果一樣、只改該改的地方
       - name: random layout tests
         run: python3 sim/tests/test_layout.py

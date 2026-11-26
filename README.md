@@ -35,6 +35,12 @@ docker compose exec fc_adapter bash -ic 'ros2 topic echo --once --qos-durability
 
 任何時候 Ctrl-C 都會上鎖，船浮上來。
 
+電磁鐵吸放的岸上測試（在 Jetson 上、repo 根目錄，不經 ROS，步驟見 [檔頭](tools/hw_tests/magnet.py)）：
+
+```bash
+python3 tools/hw_tests/magnet.py --pin 29
+```
+
 ### 模擬
 
 ```bash
@@ -43,6 +49,7 @@ cd deploy/sim
 ./mission.sh gate_pass_yaw               # 過門：下潛後先轉 yaw 對準門，再鎖航向
 ./mission.sh gate_pass -p depth=0.5 -p pass_s=6   # -p 覆寫樹的參數
 WORLD=sauvc_final.sdf ./mission.sh       # 決賽主場地
+WORLD=sauvc_final.sdf ./mission.sh drop_ball   # 投球：要從看得到 drum 的地方出發（見 src/orca_mission/README.md）
 GUI=0 ./mission.sh                       # 不開 Gazebo 視窗
 ./run.sh                                 # 只起模擬（空池），手動操控用；前景執行，Ctrl-C 結束
 WORLD=sauvc_qual.sdf ./run.sh            # 只起模擬，有門、相機與偵測
@@ -95,6 +102,7 @@ docker compose logs -f fc_adapter        # mavros、auv_adapter 的輸出
 | `src/orca_cam_bridge/` | 接收 RPi 轉出的相機影像，發布成跟 `realsense2_camera` 一樣的 topic（只有 RPi 轉接時用） |
 | `src/orca_perception/` | 物件偵測節點（RF-DETR），前視、底部相機共用一個模型 |
 | `src/orca_mission/` | 行為樹決策層：任務流程寫在 `trees/*.yaml`（旁邊有產生出來的流程圖 `.md`），見 [README](src/orca_mission/README.md) |
+| `src/orca_actuators/` | 致動器：放球的電磁鐵（`ball_dropper`，Jetson 40-pin GPIO），見 [README](src/orca_actuators/README.md) |
 | `src/orca_session/` | 場次紀錄的共用部分：紀錄放哪裡、標記（`/session/marker`、`markers.csv`）、飛控參數快照、rosbag 切片。實機的 `deploy/laptop/*.sh` 透過 [`deploy/common.sh`](deploy/common.sh) 使用 |
 | `sim/` | Gazebo 世界與模型、自寫的 gz 外掛、SITL 啟動腳本 |
 | `firmware/ardusub/` | 飛控參數：實機快照、SITL |
@@ -104,7 +112,7 @@ docker compose logs -f fc_adapter        # mavros、auv_adapter 的輸出
 | `tools/` | 水池測試腳本、鍵盤操控（`teleop/keyboard.py`）、系統辨識（`sysid/`）、CAD 轉模擬網格（`cad/`）等不屬於 ROS package 的工具 |
 | `docs/` | 架構、操作、排錯紀錄；`docs/archive/` 是已完成的計畫書、需求書 |
 
-之後會加的 package（用到時再建）：`orca_safety`（漏水、電池、kill switch、節點看門狗）、`orca_localization`、`orca_actuators`（電磁鐵、投放）、`orca_description`（URDF、TF）、`orca_bringup`（同一台機器上多個節點的 launch）。
+之後會加的 package（用到時再建）：`orca_safety`（漏水、電池、kill switch、節點看門狗）、`orca_localization`、`orca_description`（URDF、TF）、`orca_bringup`（同一台機器上多個節點的 launch）。
 
 ## 開發
 

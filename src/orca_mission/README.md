@@ -7,6 +7,8 @@
 | `gate_pass` | 過門：航向從解鎖起就鎖住（歸零時的船頭方向），對準只用 sway 平移 | [gate_pass.md](trees/gate_pass.md) |
 | `gate_pass_yaw` | 過門：下潛後先原地轉 yaw 對準門、鎖住當下的航向，之後跟 `gate_pass` 一樣 | [gate_pass_yaw.md](trees/gate_pass_yaw.md) |
 | `smoke_test` | 動作測試（下潛、轉向、前進、上浮），不需要相機 | [smoke_test.md](trees/smoke_test.md) |
+| `drop_ball` | 投球：前視轉向對準 drum → 接近到底部相機看到 → 停在正上方 → 放球。要從看得到 drum 的地方出發，需要底部相機與放球機構 | [drop_ball.md](trees/drop_ball.md) |
+| `drop_test` | 水下放球測試：下潛、停、放球，不需要相機 | [drop_test.md](trees/drop_test.md) |
 
 ## 跑
 
@@ -49,8 +51,8 @@ mission <樹> [-p 名稱=值 ...] [--no-checklist] [--print-tree] [--run-name �
 | `orca_mission/vehicle.py` | `VehicleState`（mavros → 深度、航向；自己記零點；航向歷史內插）、`Command`、`Shaper` |
 | `orca_mission/perception.py` | `/detections` → `Sighting`：方位角、仰角、偏移、框寬、拍攝當下的航向、絕對方位；`last_seen` |
 | `orca_mission/task_runner.py` | `TaskRunner`：`/auv_control` 唯一的主人 |
-| `orca_mission/tasks/` | 執行器：`Hold`、`Dive`、`TurnTo`、`Cruise`（placeholder），`AlignTo`、`ApproachGate`（過門） |
-| `orca_mission/bt/behaviours.py` | 行為樹的葉節點：`TaskAction`（包執行器），`WaitReady`、`Confirm`、`Zero`、`Arm`、`Finish`、`Seen` |
+| `orca_mission/tasks/` | 執行器：`Hold`、`Dive`、`TurnTo`、`Cruise`（placeholder），`AlignTo`、`CenterGate`、`ApproachGate`（過門），`ApproachTarget`、`CenterOver`（投球） |
+| `orca_mission/bt/behaviours.py` | 行為樹的葉節點：`TaskAction`（包執行器），`WaitReady`、`Confirm`、`Zero`、`Arm`、`Finish`、`Seen`、`DropBall` |
 | `orca_mission/bt/loader.py` | YAML → py_trees，載入時檢查（節點種類、參數名稱、必填、型別） |
 | `orca_mission/bt/render.py` | YAML → Mermaid 流程圖（`render_tree` 指令） |
 | `config/orca.yaml` | 相機（frame_id、camera_info topic、安裝角度）、指令上限 |
@@ -61,7 +63,8 @@ mission <樹> [-p 名稱=值 ...] [--no-checklist] [--print-tree] [--run-name �
 - 控制只經 `/auv_control`，mavros 的 topic 只讀，`orca_bridge`（adapter）不改。
 - 模式固定 DEPTH_HOLD，`use_depth_target`、`use_yaw_target` 全程 true，不切回 yaw 轉速。原因是切回去之後的 5 秒內，飛控對 yaw 輸入沒有反應。
 - 目標航向每秒最多變 `limits.yaw_rate` 度（預設 30°/s）。大角度轉向會自動拆成小步，所以不會出現「相鄰兩筆目標差 180°、飛控不知道往哪邊轉」的情形。
-- 執行器只決定目標深度、目標航向和正規化的 surge／sway，閉迴路交給飛控。歸零、解鎖、切模式只有任務層節點能做。
+- 執行器只決定目標深度、目標航向和正規化的 surge／sway，閉迴路交給飛控。歸零、解鎖、切模式、放球只有任務層節點能做。
+- 放球經 `/ball_dropper/set_hold`（實機 `ball_dropper`、模擬 `sim_dropper`），狀態讀 `/ball_dropper/holding`。`WaitReady` 加 `dropper: true` 會等到回報「吸住」才開始。
 - 執行器結束後，保持它最後的目標深度和航向，推力歸 0。
 
 ## 寫一棵樹
@@ -94,4 +97,5 @@ cd src/orca_mission && python3 -m pytest test        # 要有 py_trees；或在 
 - **水平方向沒有定位**（沒有 DVL、GPS），前進距離只能用時間估（`Cruise`）。
 - **內參是空氣中的**：平面視窗在水下會把角度放大約 1.33 倍。閉迴路會收斂，只是等效增益變小。
 - **模擬比實機容易**：畫面乾淨，偵測比實機穩定，只適合驗證流程和正負號。
-- **底部相機**：模擬有，實機還沒接。RPi 轉接沒有這一路；Jetson 上用 driver 發 `/bottom_camera/image_raw`、`camera_info`（frame_id `bottom_camera_optical_frame`）即可。
+- **投球**：`drop_ball` 沒有搜尋，要從前視看得到 drum 的地方出發；`CenterOver` 沒對準就失敗、不放球。電磁鐵和底部相機不在同一點時，用 `aim_x`、`aim_y` 補（裝好後在岸上量）。俯視的 drum：相機離 drum 口太近（投球深度 1.0 m，drum 佔畫面一半以上）偵測不到，0.5 m 時分數 0.6～0.9（2026-11-26 模擬）；實機要再確認。
+- **底部相機**：模擬有，實機還沒接（之後用 USB 接 Jetson，跟 RealSense 一樣）。RPi 轉接沒有這一路；Jetson 上用 driver 發 `/bottom_camera/image_raw`、`camera_info`（frame_id `bottom_camera_optical_frame`）即可。

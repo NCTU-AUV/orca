@@ -49,12 +49,13 @@ docker compose build simulator fc_adapter
 docker compose --profile mission build mission
 if [[ $VISION == 1 ]]; then
   # sim_cameras 的水下效果跟 UNDERWATER 走，設定變了 compose 會自己重建它
-  docker compose --profile vision up -d fc_adapter sim_dropper sim_cameras object_detector
+  docker compose --profile vision up -d fc_adapter sim_cameras object_detector
 else
-  docker compose up -d fc_adapter sim_dropper
+  docker compose up -d fc_adapter
 fi
-# 裁判跟 simulator 一起重開：每次從 0 分開始，紀錄檔跟這次的 CSV、rosbag 同名
-RUN_NAME=$RUN docker compose up -d --force-recreate simulator sim_referee
+# 裁判跟 simulator 一起重開：每次從 0 分開始，紀錄檔跟這次的 CSV、rosbag 同名。
+# sim_dropper 也重開：球放掉就吸不回去，它記的「吸著／放開」要跟新的模擬一致
+RUN_NAME=$RUN docker compose up -d --force-recreate simulator sim_referee sim_dropper
 
 in_adapter() { docker compose exec -T fc_adapter /entrypoint.sh "$@" 2>/dev/null; }
 

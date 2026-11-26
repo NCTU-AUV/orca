@@ -4,7 +4,9 @@
 
 - 航向：追目標航向，上限 60°/s；深度、前進、平移都是一階延遲
 - 遙測：深度、航向、模式、解鎖狀態 4 Hz（跟實機經 mavproxy 拿到的差不多）
-- 相機：640 px 寬、fx 462（HFOV 約 69°），10 Hz、延遲 0.15 秒；太近（min_range）就偵測不到
+- 相機：640 px 寬、fx 462（HFOV 約 69°），10 Hz、延遲 0.15 秒；太近（min_range）就偵測不到。
+  前視看門（World），DrumWorld 另外有池底的 drum，前視、底部相機都看得到
+- 放球機構：set_hold 馬上生效，/ball_dropper/holding 跟著變；記下放球時船的位置（drop_xy）
 - 「adapter」：DEPTH_HOLD 時馬上切 ALT_HOLD；ALT_HOLD 才能解鎖；沒解鎖時推進器不出力；
   目標航向相對歸零時的航向（加回歸零時的世界航向再給「飛控」）
 座標：x 是起點的正前方，y 是右邊，航向順時針為正。
@@ -40,6 +42,11 @@ class World:
         self.cross_y = None         # 通過門的平面時，相對門中心的橫向位置
         self.surged_blind = False   # 還沒看過門就前進過
 
+    def detect(self):
+        """這一幀每台相機的偵測：{frame_id: [(label, score, u, v, w, h)]}。"""
+        seen = self.see()
+        return {FRONT.frame_id: [] if seen is None else [('gate', 0.9, seen[0], CY, seen[1], seen[1] * 0.6)]}
+
     def see(self):
         """目前位置看到的門框 → (中心 u, 寬 px)，看不到回傳 None。"""
         if not self.has_gate:
@@ -71,6 +78,38 @@ class World:
             self.cross_y = self.y - self.gate_xy[1]
 
 
+DRUM_D, DRUM_H = 0.6, 0.3
+
+
+class DrumWorld(World):
+    """池底（floor 深）有一個 drum（直徑 60 cm、高 30 cm），沒有門。
+
+    前視相機：drum 中心投影到畫面，太近（< 0.3 m）或出畫面就看不到。
+    底部相機：光軸朝下，畫面上方 = 船頭、右方 = 右舷；drum 口的中心在畫面內就看得到。
+    """
+
+    def __init__(self, drum_xy=(6.0, 0.5), floor=2.0, label='blue_drum', **kw):
+        super().__init__(has_gate=False, **kw)
+        self.drum_xy, self.floor, self.label = drum_xy, floor, label
+
+    def detect(self):
+        c, s = math.cos(math.radians(self.yaw)), math.sin(math.radians(self.yaw))
+        dx, dy = self.drum_xy[0] - self.x, self.drum_xy[1] - self.y
+        fwd, right = dx * c + dy * s, -dx * s + dy * c
+        out = {FRONT.frame_id: [], BOTTOM.frame_id: []}
+        down = self.floor - DRUM_H / 2 - self.depth
+        if fwd > 0.3:
+            u, v, w = CX + FX * right / fwd, CY + FX * down / fwd, FX * DRUM_D / fwd
+            if 0 <= u <= W and 0 <= v <= H:
+                out[FRONT.frame_id].append((self.label, 0.9, u, v, w, w * DRUM_H / DRUM_D))
+        h = self.floor - DRUM_H - self.depth          # 相機到 drum 口
+        if h > 0.1:
+            u, v, w = CX + FX * right / h, CY - FX * fwd / h, FX * DRUM_D / h
+            if 0 <= u <= W and 0 <= v <= H:
+                out[BOTTOM.frame_id].append((self.label, 0.9, u, v, w, w))
+        return out
+
+
 class Done:
     def __init__(self, value):
         self.value = value
@@ -92,24 +131,36 @@ class Harness:
         self.vehicle = VehicleState()
         self.perception = Perception([FRONT, BOTTOM])
         self.perception.on_camera_info('front', W, H, [FX, 0, CX, 0, FX, CY, 0, 0, 1])
+        self.perception.on_camera_info('bottom', W, H, [FX, 0, CX, 0, FX, CY, 0, 0, 1])
+        self.dropper_holding = True
+        self.drop_xy = None             # 放球時船（電磁鐵）的位置
         self.logs = []
         self.runner = TaskRunner(Shaper(limits or Limits()), log=self.logs.append)
         self.mode, self.armed = 'MANUAL', False
-        self.frames = []                # 還在路上的偵測：(送達時間, 拍攝時間, 偵測)
+        self.frames = []                # 還在路上的偵測：(送達時間, 拍攝時間, frame_id, 偵測)
         self.trace = []                 # (t, 正在跑的執行器名稱, 送出的 Command)
         self.snap = self.snapshot()
         ctx = Context(runner=self.runner, snapshot=lambda: self.snap,
                       zero=lambda: Done((True, '歸零')), zero_here=self.vehicle.zero_here,
+                      dropper=self.set_hold,
                       interactive=False, log=self.logs.append)
         self.root = build(spec if isinstance(spec, dict) else read(spec), ctx)
         self.status = None
+
+    def set_hold(self, hold):
+        if not hold:
+            if self.dropper_holding:
+                self.drop_xy = (self.world.x, self.world.y)
+            self.dropper_holding = False
+        return Done((True, '吸住' if hold else '放開'))
 
     def snapshot(self):
         v, now = self.vehicle, self.t
         return Snapshot(now=now, connected=True, armed=v.armed, mode=v.mode, zeroed=v.zeroed,
                         depth=v.depth(now), heading=v.heading(now), adapter_alive=True,
                         cameras_ready=frozenset(self.perception.intrinsics), detections_t=now,
-                        frames=self.perception.snapshot(), last_seen=dict(self.perception.last_seen))
+                        frames=self.perception.snapshot(), last_seen=dict(self.perception.last_seen),
+                        dropper_holding=self.dropper_holding)
 
     def sense(self, n):
         w = self.world
@@ -120,12 +171,11 @@ class Harness:
         if n % 5 == 0:
             self.vehicle.on_state(self.t, True, self.armed, self.mode)
         if n % 2 == 0:                                    # 10 Hz 相機
-            seen = w.see()
-            dets = [] if seen is None else [('gate', 0.9, seen[0], CY, seen[1], seen[1] * 0.6)]
-            self.frames.append((self.t + 0.15, self.t, dets))
+            for frame_id, dets in w.detect().items():
+                self.frames.append((self.t + 0.15, self.t, frame_id, dets))
         while self.frames and self.frames[0][0] <= self.t:
-            _, stamp, dets = self.frames.pop(0)
-            self.perception.on_detections(stamp, FRONT.frame_id, dets, self.vehicle.heading_at)
+            _, stamp, frame_id, dets = self.frames.pop(0)
+            self.perception.on_detections(stamp, frame_id, dets, self.vehicle.heading_at)
 
     def run(self, max_s=300.0):
         n = 0

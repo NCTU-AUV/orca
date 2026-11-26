@@ -1,0 +1,48 @@
+# 水下放球測試（行為樹），不需要相機。流程圖：drop_test.md（render_tree 產生）
+# 確認電磁鐵在水裡放得掉球、放球時船的反應（少了 200 g 會往上浮一點）。岸上的吸放測試用
+# tools/hw_tests/magnet.py（不經 ROS）。
+#
+#   ros2 run orca_mission mission drop_test                    # 實機（會列檢查清單、等 Enter）
+#   ros2 run orca_mission mission drop_test -p depth=0.5
+name: drop_test
+description: 歸零（浮在水面）→ 解鎖 → 下潛 → 停 hold_s 秒 → 放球 → 停 → 上鎖。
+
+vars:
+  depth: 0.5            # 放球深度 [m]
+  hold_s: 3.0           # 下潛到了先停多久再放
+  ready_timeout: 60
+
+root:
+  type: Sequence
+  name: 水下放球測試
+  children:
+    - type: WaitReady
+      name: 等就緒
+      dropper: true
+      timeout: $ready_timeout
+
+    - type: Confirm
+      name: 檢查清單
+      checklist:
+        - 球裝在電磁鐵上、吸住了（/ball_dropper/holding 是 true）
+        - 船浮在水面、靜止，正下方沒有東西、撿得回球
+        - 繩子綁好，kill switch 在手邊
+        - QGC 的 joystick 關閉
+
+    - {type: Zero, name: 歸零}
+    - {type: Arm, name: 解鎖, depth: $depth}
+
+    - type: Sequence
+      name: 下水之後
+      timeout: 90
+      children:
+        - type: Dive
+          name: 下潛
+          depth: $depth
+          tol: 0.05
+          stable_s: 2.0
+          timeout: 40
+        - {type: Hold, name: 停, seconds: $hold_s}
+        - {type: DropBall, name: 放球, wait_s: 3.0}
+        - {type: Hold, name: 放球後停, seconds: 2.0}
+        - {type: Finish, name: 上鎖}

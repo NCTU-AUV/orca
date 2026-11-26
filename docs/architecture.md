@@ -19,6 +19,7 @@
 - `/camera/camera/color/image_raw`、`camera_info`：前視相機，名稱跟 `realsense2_camera` 預設一樣，換相機來源時下游不用改。`frame_id` 是 `camera_color_optical_frame`。
 - `/bottom_camera/image_raw`、`camera_info`：底部相機，`frame_id` 是 `bottom_camera_optical_frame`。模擬已經有；實機還沒接（RPi 轉接沒有這一路，Jetson 上用 `usb_cam` 之類的 driver 發這兩個 topic 即可）。
 - `/detections`（`vision_msgs/Detection2DArray`）：`class_id` 是類別名稱，例如 `gate`、`red_drum`。前視、底部共用這個 topic，`header.frame_id` 分辨是哪一台相機，`header.stamp` 是拍攝時間；bbox 是原始影像的像素座標。
+- `/ball_dropper/set_hold`（`std_srvs/SetBool`）：放球的電磁鐵，`true` 吸住、`false` 放開；`/ball_dropper/holding`（`std_msgs/Bool`，transient local）是目前的狀態。實機由 `orca_actuators` 的 `ball_dropper` 控制 Jetson 40-pin 的 GPIO，模擬由 `sim_dropper` 提供同一套介面，見 [src/orca_actuators/README.md](../src/orca_actuators/README.md)。
 - `/mission/status`（`std_msgs/String`，JSON，2 Hz）：行為樹目前跑到哪個節點、執行器的回饋、深度、航向、指令。
 
 ## 幀率

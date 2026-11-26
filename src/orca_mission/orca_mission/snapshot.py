@@ -19,6 +19,7 @@ class Snapshot:
     detections_t: float = -math.inf            # 最後一次收到 /detections
     frames: dict = field(default_factory=dict)  # Perception.snapshot()
     last_seen: dict = field(default_factory=dict)   # label → Sighting
+    dropper_holding: object = None  # 放球機構：True 吸住、False 放開、None 沒有回報（/ball_dropper/holding）
 
     @property
     def state_ok(self):

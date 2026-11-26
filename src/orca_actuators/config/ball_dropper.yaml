@@ -1,0 +1,7 @@
+# ball_dropper 節點的參數（ros2 run orca_actuators ball_dropper --ros-args --params-file <這個檔>）。
+# 腳位與極性用 tools/hw_tests/magnet.py 在岸上實測確定後再改這裡，並記到 docs/test-logs/。
+ball_dropper:
+  ros__parameters:
+    pin: 29               # 40-pin 的實體腳號（29 = PQ.05，GPIO01）。暫定，接線後確認
+    active_high: true     # true：腳位 HIGH = 電磁鐵通電吸住。暫定，實測後確認
+    hold_on_start: true   # 節點啟動時就吸住（岸上裝好球之後才開任務）

@@ -46,7 +46,7 @@ Gazebo（泳池 + Orca）⇄ ArduSub 4.7.2（SITL）→ mavproxy → mavros → 
 | `simulator` | Gazebo 泳池與 Orca、ArduSub SITL、mavproxy（MAVLink 轉送到 UDP 14550 給 QGC、UDP 14551 給 mavros） | 全部腳本 |
 | `fc_adapter` | mavros 與 `auv_adapter.py`，跟實機用同一個 image，只差 mavros 設定（`mavros_sitl.yaml`） | `run.sh`、`mission.sh` |
 | `sim_referee` | 模擬裁判（[`sim/referee.py`](../../sim/referee.py)）：碰撞、過門、掉球、上浮 → `/sim/referee/events`、分數。只有模擬有，任務程式不要訂閱 | 全部腳本 |
-| `sim_dropper` | 放球指令 `/ball_dropper/release`（`std_msgs/Empty`，**暫定介面**）→ Gazebo 放開掛在船底的球（只有 `sauvc_final.sdf` 有球） | 全部腳本 |
+| `sim_dropper` | 放球機構：`/ball_dropper/set_hold`（`std_srvs/SetBool`，`false` = 放開）、`/ball_dropper/holding`，跟實機 `ball_dropper` 同一套介面 → Gazebo 放開掛在船底的球（只有 `sauvc_final.sdf` 有球） | 全部腳本 |
 | `sim_cameras` | Gazebo 前視、底部相機 → ROS 影像，含水下後處理（`vision` profile） | 有相機的世界 |
 | `object_detector` | 跟實機同一個 RF-DETR 節點 → `/detections`、畫好框的影像（`vision` profile） | 有相機的世界 |
 | `recorder` | rosbag（MCAP）（`record` profile） | `mission.sh` |
@@ -126,7 +126,7 @@ docker compose exec fc_adapter bash -ic 'python3 /orca/tools/pool_tests/water_mi
 | 看相機畫面 | `docker compose run --rm gui_tools ros2 run rqt_image_view rqt_image_view /camera/camera/color/image_raw`。topic 換成 `/bottom_camera/image_raw` 是底部相機，`/detections/image`、`/detections/bottom_image` 是畫好偵測框的畫面，視窗左上的下拉選單也能切換 |
 | 即時看裁判的事件、分數 | `docker compose exec fc_adapter bash -ic 'ros2 topic echo /sim/referee/events'`（分數與狀態在 `/sim/referee/state`），或 `tail -f logs/referee/<名稱>.jsonl` |
 | 重新計分（不重開模擬） | `docker compose exec fc_adapter bash -ic 'ros2 topic pub --once /sim/referee/reset std_msgs/msg/Empty'` |
-| 放球（只有 `sauvc_final.sdf` 有球） | `docker compose exec fc_adapter bash -ic 'ros2 topic pub --once /ball_dropper/release std_msgs/msg/Empty'` |
+| 放球（只有 `sauvc_final.sdf` 有球） | `docker compose exec fc_adapter bash -ic 'ros2 service call /ball_dropper/set_hold std_srvs/srv/SetBool "{data: false}"'` |
 | 開關水下效果、調強度 | `docker compose exec fc_adapter bash -ic 'ros2 param set /sim_cameras underwater false'`；強度：`ros2 param set /sim_cameras underwater_strength 0.5`。只影響相機影像，世界裡的水面與水體霧要用 `UNDERWATER=0` 重開 |
 | 船回到出發位置 | 重開 `simulator`：`WORLD=<世界> ./run.sh -d --force-recreate`，或直接再跑一次 `./mission.sh`。只想搬船不重開，見[排錯](#排錯gazebo-指令)的 `set_pose` |
 | 單獨錄 rosbag | `BAG_NAME=名稱 docker compose --profile record up -d recorder`，停止用 `docker compose --profile record stop recorder`（送 SIGINT 讓它把檔案收尾，不要用 `down` 或 `kill`）。存在 `logs/bag/<名稱>/` |

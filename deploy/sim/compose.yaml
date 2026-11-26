@@ -18,7 +18,7 @@
 #   simulator        Gazebo + ArduSub SITL + mavproxy
 #   fc_adapter       飛控介面：mavros + auv_adapter（/auv_control → ArduSub）。程式不改
 #   sim_referee      模擬裁判：碰撞、過門、掉球、上浮 → /sim/referee/events、分數（只有模擬有，任務程式不要訂閱）
-#   sim_dropper      放球指令 /ball_dropper/release（ROS，暫定介面）→ Gazebo 放開球
+#   sim_dropper      放球機構：/ball_dropper/set_hold、holding（跟實機 ball_dropper 同一套介面）→ Gazebo 放開球
 #   sim_cameras      Gazebo 的前視、底部相機 → ROS 影像（topic、frame_id 同實機），含水下後處理
 #   object_detector  RF-DETR：影像 → /detections、畫好框的影像（原始、JPEG）
 #   recorder         每次任務錄一個 rosbag（MCAP），影像只錄畫好框的 JPEG
@@ -103,8 +103,10 @@ services:
       - ./logs/referee:/logs
     command: [bash, -c, "source /opt/ros/humble/setup.bash && exec python3 -u /sim/referee.py"]
 
-  # 放球指令（sim/gz_dropper_bridge.py）：ROS /ball_dropper/release（std_msgs/Empty，暫定介面）
+  # 放球機構（sim/gz_dropper_bridge.py）：/ball_dropper/set_hold（std_srvs/SetBool，false = 放開）、
+  # /ball_dropper/holding（std_msgs/Bool），跟實機的 ball_dropper（src/orca_actuators）同一套介面
   # → Gazebo 放開掛在船底的球。只有 sauvc_final.sdf 有球，其他世界收到指令不會有事發生。
+  # 球放掉就吸不回去，所以要跟 simulator 一起重開（mission.sh、referee_check.sh 會做）。
   sim_dropper:
     image: orca-sim
     network_mode: host

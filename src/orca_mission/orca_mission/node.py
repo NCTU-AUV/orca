@@ -43,11 +43,11 @@ import yaml
 from mavros_msgs.msg import ManualControl, State
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import CameraInfo, Imu
-from std_msgs.msg import Float64, String
-from std_srvs.srv import Trigger
+from std_msgs.msg import Bool, Float64, String
+from std_srvs.srv import SetBool, Trigger
 from vision_msgs.msg import Detection2DArray
 
 from orca_msgs.msg import AuvControl
@@ -70,11 +70,13 @@ MODES = {'MANUAL': AuvControl.MODE_MANUAL, 'DEPTH_HOLD': AuvControl.MODE_DEPTH_H
 ARMS = {'': AuvControl.ARM_NO_CHANGE, 'ARM': AuvControl.ARM, 'DISARM': AuvControl.DISARM}
 
 
-class ZeroCall:
-    """非同步呼叫 /auv_adapter/zero，給行為樹的 Zero 節點輪詢。"""
+class ServiceCall:
+    """非同步呼叫一個服務（Trigger、SetBool 這類有 success、message 的），給行為樹的節點輪詢。
+    用在 Zero（/auv_adapter/zero）、DropBall（/ball_dropper/set_hold）。"""
 
-    def __init__(self, client):
-        self.client, self.future, self.error = client, None, None
+    def __init__(self, client, request, who):
+        self.client, self.request, self.who = client, request, who
+        self.future, self.error = None, None
         self.t0 = time.monotonic()
 
     def done(self):
@@ -82,13 +84,13 @@ class ZeroCall:
             return True
         if self.future is None:
             if self.client.service_is_ready():
-                self.future = self.client.call_async(Trigger.Request())
+                self.future = self.client.call_async(self.request)
             elif time.monotonic() - self.t0 > 3.0:
-                self.error = '找不到 /auv_adapter/zero，fc_adapter 有在跑嗎？'
+                self.error = f'找不到 {self.client.srv_name}，{self.who} 有在跑嗎？'
                 return True
             return False
         if not self.future.done() and time.monotonic() - self.t0 > 8.0:
-            self.error = '/auv_adapter/zero 沒有回覆'
+            self.error = f'{self.client.srv_name} 沒有回覆'
             return True
         return self.future.done()
 
@@ -126,6 +128,7 @@ class MissionNode(Node):
         self.perception = Perception(cameras)
         self.runner = TaskRunner(Shaper(limits), log=self.say)
         self.detections_t = -math.inf
+        self.dropper_holding = None     # /ball_dropper/holding
         self.snap = self.snapshot()
         self.was_armed = False
         self.done = None                # (成功與否, 訊息)，樹結束或中止後才有
@@ -134,6 +137,9 @@ class MissionNode(Node):
         self.pub = self.create_publisher(AuvControl, '/auv_control', 10)
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
         self.zero_client = self.create_client(Trigger, '/auv_adapter/zero')
+        self.dropper_client = self.create_client(SetBool, '/ball_dropper/set_hold')
+        self.create_subscription(Bool, '/ball_dropper/holding', self.on_dropper, QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_subscription(State, '/mavros/state', self.on_state, qos_profile_sensor_data)
         self.create_subscription(Float64, '/mavros/global_position/rel_alt',
                                  lambda m: self.vehicle.on_rel_alt(self.now(), m.data),
@@ -149,7 +155,10 @@ class MissionNode(Node):
                 qos_profile_sensor_data)
 
         ctx = Context(runner=self.runner, snapshot=lambda: self.snap,
-                      zero=lambda: ZeroCall(self.zero_client), zero_here=self.vehicle.zero_here,
+                      zero=lambda: ServiceCall(self.zero_client, Trigger.Request(), 'fc_adapter'),
+                      zero_here=self.vehicle.zero_here,
+                      dropper=lambda hold: ServiceCall(self.dropper_client, SetBool.Request(data=hold),
+                                                       '放球機構（實機 ball_dropper、模擬 sim_dropper）'),
                       interactive=interactive, log=self.say)
         self.tree = py_trees_ros.trees.BehaviourTree(build(spec, ctx))
         self.tree.setup(node=self, timeout=5.0)
@@ -157,7 +166,7 @@ class MissionNode(Node):
         self.f = open(log_path, 'w', newline='')
         self.csv = csv.writer(self.f)
         self.csv.writerow(['unix_time', 'node', 'feedback', 'fc_mode', 'armed', 'depth_m', 'heading_deg',
-                           'target_depth', 'target_yaw', 'surge', 'sway', 'sightings'])
+                           'target_depth', 'target_yaw', 'surge', 'sway', 'sightings', 'ball_holding'])
         self.create_timer(1.0 / CONTROL_HZ, self.on_control)
         self.tick_timer = self.create_timer(1.0 / TICK_HZ, self.on_tick)
         self.create_timer(0.5, self.on_status)
@@ -173,6 +182,9 @@ class MissionNode(Node):
     def on_imu(self, m):
         q = m.orientation
         self.vehicle.on_orientation(self.now(), q.x, q.y, q.z, q.w)
+
+    def on_dropper(self, m):
+        self.dropper_holding = m.data
 
     def on_detections(self, msg):
         self.detections_t = self.now()
@@ -192,7 +204,8 @@ class MissionNode(Node):
             now=now, connected=v.connected, armed=v.armed, mode=v.mode, zeroed=v.zeroed,
             depth=v.depth(now), heading=v.heading(now), adapter_alive=v.adapter_alive(now),
             cameras_ready=frozenset(self.perception.intrinsics), detections_t=self.detections_t,
-            frames=self.perception.snapshot(), last_seen=dict(self.perception.last_seen))
+            frames=self.perception.snapshot(), last_seen=dict(self.perception.last_seen),
+            dropper_holding=self.dropper_holding)
 
     # ---------- 行為樹 10 Hz ----------
 
@@ -245,7 +258,8 @@ class MissionNode(Node):
         self.csv.writerow([round(time.time(), 3), tip.name if tip else '', tip.feedback_message if tip else '',
                            snap.mode, snap.armed, num(snap.depth, 4), num(snap.heading, 2),
                            round(c.target_depth, 3), round(c.target_yaw, 2), round(c.surge, 3),
-                           round(c.sway, 3), seen])
+                           round(c.sway, 3), seen,
+                           '' if snap.dropper_holding is None else int(snap.dropper_holding)])
 
     # ---------- 狀態 ----------
 
@@ -258,6 +272,7 @@ class MissionNode(Node):
             'fc_mode': snap.mode, 'armed': snap.armed, 'runner': self.runner.mode.value,
             'depth': snap.depth if math.isfinite(snap.depth) else None,
             'heading': snap.heading if math.isfinite(snap.heading) else None,
+            'ball_holding': snap.dropper_holding,
             'cmd': {'surge': c.surge, 'sway': c.sway, 'target_depth': c.target_depth, 'target_yaw': c.target_yaw},
             'seen': {lbl: {'camera': s.camera, 'age': round(snap.now - s.t, 2), 'abs_bearing': s.abs_bearing
                            if math.isfinite(s.abs_bearing) else None} for lbl, s in snap.last_seen.items()},

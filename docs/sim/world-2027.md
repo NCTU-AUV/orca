@@ -133,12 +133,13 @@ docker compose exec sim_referee bash -ic 'ros2 topic echo /sim/referee/events'
 
 只做電磁鐵：球用 DetachableJoint 固定在船底，收到指令就放開，自己沉下去（200 g、排水約 34 g）。
 
-| | topic | 型別 |
+| | 名稱 | 型別 |
 |---|---|---|
-| 任務層 → 模擬 | `/ball_dropper/release` | `std_msgs/Empty` |
+| 任務層 → 模擬（service） | `/ball_dropper/set_hold` | `std_srvs/SetBool`，`false` = 放開 |
+| 模擬 → 任務層 | `/ball_dropper/holding` | `std_msgs/Bool`（transient local） |
 | `sim_dropper` → Gazebo | `/orca/ball_dropper/release`（gz） | `gz.msgs.Empty` |
 
-**ROS 這一側的介面是暫定的**（實機的放球機構還沒定案）。實機定了之後改 [`sim/gz_dropper_bridge.py`](../../sim/gz_dropper_bridge.py) 開頭的 `ROS_TOPIC`、`ROS_TYPE` 兩行。放開是一次性的，要再試就重開模擬。
+ROS 這一側跟實機的 `ball_dropper`（[src/orca_actuators](../../src/orca_actuators/README.md)）同一套介面，任務層不用分實機、模擬。放開是一次性的（`set_hold true` 回 `success: false`），要再試就重開模擬：`mission.sh`、`referee_check.sh` 會把 `sim_dropper` 跟 `simulator` 一起重開。
 
 ## 水下的畫面
 

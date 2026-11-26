@@ -1,0 +1,87 @@
+# 投球（行為樹）。流程圖：drop_ball.md（render_tree 產生）
+# 從看得到 drum 的地方出發：前視相機轉向對準藍色 drum → 接近到底部相機看到 → 停在正上方 → 放球。
+# 需要底部相機（模擬有；實機要裝好、發 /bottom_camera/image_raw、camera_info）和放球機構
+# （實機 ball_dropper、模擬 sim_dropper）。只有 sauvc_final.sdf 有 drum 和球。
+#
+#   ros2 run orca_mission mission drop_ball                    # 實機（會列檢查清單、等 Enter）
+#   ros2 run orca_mission mission drop_ball --no-checklist     # 模擬
+#   ros2 run orca_mission mission drop_ball -p labels=[red_drum] -p depth=1.2
+#
+# 樹結束（成功或失敗）、逾時、Ctrl-C 都會 MANUAL、全 0、DISARM（node.py），船浮上來。
+# 沒對準就不放球：CenterOver 失敗時整棵樹失敗，球還在船上。
+name: drop_ball
+description: >
+  歸零（浮在水面）→ 解鎖 → 下潛 → 前視相機原地轉向對準 drum、鎖住航向 → 往前走、sway 修左右，
+  直到底部相機看到 drum → 用 surge、sway 平移到 drum 正上方（底部畫面的 aim 點）→ 放球 → 停 → 上鎖。
+
+vars:
+  depth: 0.5            # 投球深度 [m]。2 m 深的池子 drum 口在 1.7 m，相機離 drum 口約 1.2 m，drum 約佔畫面寬 1/3。
+                        # 太深（1.0 m：drum 佔畫面一半以上）俯視偵測不到 drum（2026-11-26 模擬實測）
+  labels: [blue_drum]   # 要投的 drum（藍 30 分；紅的 10 分，裝 pinger 的紅 50 分但要靠水聽器分辨）
+  min_score: 0.5        # 前視
+  bottom_min_score: 0.35  # 底部相機（俯視的 drum 分數比前視低，畫面邊緣 0.4～0.7）
+  surge: 0.15           # 接近時的前進推力
+  blind_s: 15.0         # 前視看不到 drum 之後最多再直走幾秒等底部相機看到（0.5 m 深時模擬實測約 10 秒）
+  aim_x: 0.0            # 電磁鐵正下方在底部相機畫面的位置（畫面中央 0、右緣／下緣 +1），裝好後在岸上量
+  aim_y: 0.0
+  center_tol: 0.1       # 對準門檻：drum 中心到 aim 的距離（同上的單位）
+  ready_timeout: 60
+
+root:
+  type: Sequence
+  name: 投球
+  children:
+    - type: WaitReady
+      name: 等就緒
+      cameras: [front, bottom]
+      detections: true
+      dropper: true
+      timeout: $ready_timeout
+
+    - type: Confirm
+      name: 檢查清單
+      checklist:
+        - 球裝在電磁鐵上、吸住了（/ball_dropper/holding 是 true）
+        - 船浮在水面、靜止，船頭大致朝向 drum，前視相機看得到要投的 drum
+        - 繩子綁好，kill switch 在手邊
+        - QGC 的 joystick 關閉
+
+    - {type: Zero, name: 歸零}
+    - {type: Arm, name: 解鎖, depth: $depth}
+
+    - type: Sequence
+      name: 下水之後
+      timeout: 240      # 從解鎖後算，整段的上限
+      children:
+        - type: Dive
+          name: 下潛
+          depth: $depth
+          tol: 0.05
+          stable_s: 2.0
+          timeout: 60
+
+        - type: AlignTo
+          name: 轉向對準 drum
+          labels: $labels
+          min_score: $min_score
+
+        - type: ApproachTarget
+          name: 接近 drum
+          labels: $labels
+          min_score: $min_score
+          stop_min_score: $bottom_min_score
+          surge: $surge
+          blind_s: $blind_s
+          timeout: 90
+
+        - type: CenterOver
+          name: 停到 drum 正上方
+          labels: $labels
+          min_score: $bottom_min_score
+          aim_x: $aim_x
+          aim_y: $aim_y
+          tol: $center_tol
+
+        - {type: DropBall, name: 放球, wait_s: 3.0}
+        - {type: Hold, name: 停, seconds: 2.0}
+        - {type: Finish, name: 上鎖}
