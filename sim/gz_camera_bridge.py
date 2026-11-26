@@ -21,7 +21,7 @@ frame_id 跟 src/orca_mission/config/orca.yaml 一致：偵測靠它分辨是哪
 的 sim_cameras 服務。不需要 ros_gz。世界檔沒有某台相機時，那台就不會有影像，其他照常。
 
 時間戳：收到影像時的 ROS 時鐘（主機時間）。模擬以約 1 倍速跑，跟實機 cam_bridge 一樣用主機時間。
-視角要跟模型一致：環境變數 CAMERA_HFOV（前視，0.9725 rad）、BOTTOM_CAMERA_HFOV（底部，1.2217 rad）。
+視角要跟模型一致：環境變數 CAMERA_HFOV（前視，0.9725 rad）、BOTTOM_CAMERA_HFOV（底部，2.0944 rad = 120°）。
 """
 import math
 import os
@@ -64,7 +64,7 @@ CAMERAS = [
     ('bottom', os.environ.get('GZ_BOTTOM_CAMERA_TOPIC', '/orca/bottom_camera/image'),
      os.environ.get('GZ_BOTTOM_CAMERA_DEPTH_TOPIC', '/orca/bottom_camera/depth'),
      '/bottom_camera/image_raw', '/bottom_camera/camera_info',
-     'bottom_camera_optical_frame', float(os.environ.get('BOTTOM_CAMERA_HFOV', '1.2217'))),
+     'bottom_camera_optical_frame', float(os.environ.get('BOTTOM_CAMERA_HFOV', '2.0944'))),
 ]
 
 

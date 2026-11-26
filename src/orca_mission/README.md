@@ -97,5 +97,5 @@ cd src/orca_mission && python3 -m pytest test        # 要有 py_trees；或在 
 - **水平方向沒有定位**（沒有 DVL、GPS），前進距離只能用時間估（`Cruise`）。
 - **內參是空氣中的**：平面視窗在水下會把角度放大約 1.33 倍。閉迴路會收斂，只是等效增益變小。
 - **模擬比實機容易**：畫面乾淨，偵測比實機穩定，只適合驗證流程和正負號。
-- **投球**：`drop_ball` 沒有搜尋，要從前視看得到 drum 的地方出發；`CenterOver` 沒對準就失敗、不放球。電磁鐵和底部相機不在同一點時，用 `aim_x`、`aim_y` 補（裝好後在岸上量）。俯視的 drum：相機離 drum 口太近（投球深度 1.0 m，drum 佔畫面一半以上）偵測不到，0.5 m 時分數 0.6～0.9（2026-11-26 模擬）；實機要再確認。
+- **投球**：`drop_ball` 沒有搜尋，要從前視看得到 drum 的地方出發；`CenterOver` 沒對準就失敗、不放球。電磁鐵和底部相機不在同一點時，用 `aim_x`、`aim_y` 補（裝好後在岸上量）。俯視的 drum：drum 佔畫面太大時偵測不到（70° 鏡頭、投球深度 1.0 m）；底部相機 120°、0.5 m 時分數中位數 0.94（2026-11-26 模擬）。實機的 120° 鏡頭有畸變，要再確認。`CenterOver` 的推力有下限 0.1，小推力會落在 T200 的死區裡推不動。
 - **底部相機**：模擬有，實機還沒接（之後用 USB 接 Jetson，跟 RealSense 一樣）。RPi 轉接沒有這一路；Jetson 上用 driver 發 `/bottom_camera/image_raw`、`camera_info`（frame_id `bottom_camera_optical_frame`）即可。

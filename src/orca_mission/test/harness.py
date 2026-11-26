@@ -25,6 +25,7 @@ from orca_mission.vehicle import Command, Limits, Shaper, VehicleState, wrap
 
 DT = 0.05
 W, H, FX, CX, CY = 640, 480, 462.0, 320.0, 240.0
+FXB = (W / 2) / math.tan(math.radians(60.0))      # 底部相機：水平視角 120°（同 sim/models/orca_cam）
 GATE_W = 1.5
 SPEED = 1.5         # 推力 1.0 時的速度 [m/s]（surge 0.2 → 0.3 m/s）
 FRONT = CameraConfig('front', 'front_frame', '/front/camera_info')
@@ -85,7 +86,7 @@ class DrumWorld(World):
     """池底（floor 深）有一個 drum（直徑 60 cm、高 30 cm），沒有門。
 
     前視相機：drum 中心投影到畫面，太近（< 0.3 m）或出畫面就看不到。
-    底部相機：光軸朝下，畫面上方 = 船頭、右方 = 右舷；drum 口的中心在畫面內就看得到。
+    底部相機：光軸朝下、水平視角 120°，畫面上方 = 船頭、右方 = 右舷；drum 口的中心在畫面內就看得到。
     """
 
     def __init__(self, drum_xy=(6.0, 0.5), floor=2.0, label='blue_drum', **kw):
@@ -104,7 +105,7 @@ class DrumWorld(World):
                 out[FRONT.frame_id].append((self.label, 0.9, u, v, w, w * DRUM_H / DRUM_D))
         h = self.floor - DRUM_H - self.depth          # 相機到 drum 口
         if h > 0.1:
-            u, v, w = CX + FX * right / h, CY - FX * fwd / h, FX * DRUM_D / h
+            u, v, w = CX + FXB * right / h, CY - FXB * fwd / h, FXB * DRUM_D / h
             if 0 <= u <= W and 0 <= v <= H:
                 out[BOTTOM.frame_id].append((self.label, 0.9, u, v, w, w))
         return out
@@ -131,7 +132,7 @@ class Harness:
         self.vehicle = VehicleState()
         self.perception = Perception([FRONT, BOTTOM])
         self.perception.on_camera_info('front', W, H, [FX, 0, CX, 0, FX, CY, 0, 0, 1])
-        self.perception.on_camera_info('bottom', W, H, [FX, 0, CX, 0, FX, CY, 0, 0, 1])
+        self.perception.on_camera_info('bottom', W, H, [FXB, 0, CX, 0, FXB, CY, 0, 0, 1])
         self.dropper_holding = True
         self.drop_xy = None             # 放球時船（電磁鐵）的位置
         self.logs = []

@@ -14,7 +14,8 @@
 | `blind_s` | `15` |
 | `aim_x` | `0` |
 | `aim_y` | `0` |
-| `center_tol` | `0.1` |
+| `align_tol` | `1.5` |
+| `center_tol` | `0.08` |
 | `ready_timeout` | `60` |
 
 ```mermaid
@@ -38,7 +39,7 @@ flowchart TD
   n7 -->|1| n8
   n9(["<b>下潛（Dive）</b><br/>depth = 0.5<br/>tol = 0.05"]):::task
   n8 --> n9
-  n10(["<b>轉向對準 drum（AlignTo）</b><br/>labels = blue_drum"]):::task
+  n10(["<b>轉向對準 drum（AlignTo）</b><br/>labels = blue_drum<br/>tol = 1.5"]):::task
   n7 -->|2| n10
   n11{{"⏱ 90 s"}}:::dec
   n7 -->|3| n11

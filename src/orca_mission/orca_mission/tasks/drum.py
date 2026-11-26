@@ -9,7 +9,7 @@
 import dataclasses
 import math
 
-from ..vehicle import Command, clamp
+from ..vehicle import Command, clamp, wrap
 from .base import Task
 
 
@@ -23,6 +23,13 @@ class ApproachTarget(Task):
     靠近時目標會從前視畫面的下緣出去、還沒進底部相機的視野（中間有一段兩台都看不到），
     所以前視看不到之後照樣直走，最多 blind_s 秒；這段時間底部相機看到就成功，沒看到就失敗。
     一開始前視就沒看到：停住等，find_timeout 秒都沒看到就失敗。
+
+    左右修正看目標的「絕對方位相對鎖住的航向」（abs_bearing − 目標航向），不看畫面上的 offset_x：
+    船頭被推歪時目標在畫面上會跑掉，但絕對方位不變，sway 不會跟著亂修。2026-11-26 模擬：
+    surge 從 0 跳到 0.15 的瞬間船頭被推偏約 3.4°（飛控拉回來很慢，小誤差落在推進器死區），
+    用 offset_x 時 sway 把這當成左右偏移、往反方向修，看起來就是往前的瞬間左右晃一下。
+    surge 也改成 surge_ramp_s 秒內慢慢加上去，減少這一下的偏航。
+    sway 至少 sway_min（約 2 N），小於這個 T200 不出力。
     """
 
     @dataclasses.dataclass
@@ -34,10 +41,14 @@ class ApproachTarget(Task):
         stop_min_score: float = 0.35    # stop_camera（俯視）的門檻，分數比前視低
         max_age: float = 0.5
         surge: float = 0.15
-        sway_gain: float = 0.8
+        surge_ramp_s: float = 2.0       # surge 從 0 加到 surge 花幾秒
+        sway_gain: float = 0.06         # sway = sway_gain × 方位差 [deg]（5° → 0.3）
+        sway_min: float = 0.1
         sway_max: float = 0.3
-        sway_deadband: float = 0.03
-        forward_offset_max: float = 0.25    # 左右偏太多（|offset_x| 超過）先停下來平移，不往前
+        sway_deadband: float = 1.0      # 方位差 [deg] 小於這個不修
+        sway_hold_s: float = 0.5        # 方位差超過 deadband 持續這麼久才修（遙測的航向比影像晚到，船頭剛被推歪時
+                                        # 絕對方位會短暫算錯）
+        forward_bearing_max: float = 10.0   # 方位差超過這個 [deg] 先停下來平移，不往前
         blind_s: float = 10.0
         find_timeout: float = 10.0
 
@@ -49,7 +60,8 @@ class ApproachTarget(Task):
         p = self.p
         depth = self.hold.target_depth
         stop = Command(0.0, 0.0, depth, self.yaw)
-        ahead = Command(p.surge, 0.0, depth, self.yaw)
+        surge = p.surge * min(1.0, self.elapsed(snap) / p.surge_ramp_s) if p.surge_ramp_s > 0 else p.surge
+        ahead = Command(surge, 0.0, depth, self.yaw)
         labels = _labels(p.labels)
         below = snap.best(labels, p.stop_camera, p.max_age, p.stop_min_score)
         if below is not None:
@@ -68,9 +80,14 @@ class ApproachTarget(Task):
                 return self.fail(f'前視看不到之後走了 {p.blind_s:g} 秒，{p.stop_camera} 還是沒看到', stop)
             return ahead
         self.seen_t = snap.now
-        self.feedback = f'{s.label} 偏移 {s.offset_x:+.2f}、{s.offset_y:+.2f}（{s.score:.2f}）'
-        sway = 0.0 if abs(s.offset_x) < p.sway_deadband else clamp(p.sway_gain * s.offset_x, p.sway_max)
-        surge = p.surge if abs(s.offset_x) <= p.forward_offset_max else 0.0
+        # 目標相對鎖住航向的方位：右邊為正。拍攝當下的航向不知道時退回只用畫面上的方位角
+        rel = wrap(s.abs_bearing - self.yaw) if math.isfinite(s.abs_bearing) else s.bearing
+        self.feedback = f'{s.label} 方位差 {rel:+.1f}°（{s.score:.2f}）'
+        sway = 0.0
+        if self.held(abs(rel) >= p.sway_deadband, snap.now, p.sway_hold_s):
+            sway = math.copysign(min(max(p.sway_gain * abs(rel), p.sway_min), p.sway_max), rel)
+        if abs(rel) > p.forward_bearing_max:
+            surge = 0.0
         return Command(surge, sway, depth, self.yaw)
 
 
@@ -79,7 +96,12 @@ class CenterOver(Task):
 
     aim_x、aim_y：電磁鐵正下方在底部相機畫面裡的位置（offset 的單位：畫面中央 0、右緣／下緣 +1）。
     電磁鐵跟相機不在同一點時，用它補偏移；裝好之後在岸上量（球垂下去的位置在畫面哪裡）。
-    誤差（到 aim 的距離）≤ tol 持續 stable_s 秒算對準，成功。
+    誤差 = drum 中心到 aim 的距離，用「幾個 drum 直徑」算（bbox 的寬、高就是一個直徑），
+    跟相機視角、深度都無關（底部相機 120° 時，畫面比例 0.1 在 1.2 m 高約 21 cm，不能直接當門檻）。
+    誤差 ≤ tol 持續 stable_s 秒算對準，成功。例：tol 0.08、drum 直徑 60 cm → 中心偏 5 cm 以內。
+    推力照畫面上的偏移算（gain × offset），但不小於 min_effort：小推力落在 T200 的死區裡，
+    船推不動（docs/sim/notes.md「CAD 船體、推力死區」；2026-11-26 模擬：surge 0.03 時停在 7 cm 不動）。
+    哪一軸的誤差已經 ≤ tol / 2 就不推那一軸。
     看不到目標時往最後看到的方向慢慢移（seek_effort）：畫面邊緣的偵測分數比較低、常常掉，停在原地
     會一直卡在邊緣（2026-11-26 模擬實測：邊緣 0.4～0.7，正下方 0.9 以上）。
     lost_timeout 秒都沒看到失敗。give_up_s 秒還沒對準也失敗（不在沒對準時放球）。
@@ -95,8 +117,10 @@ class CenterOver(Task):
         aim_y: float = 0.0
         gain: float = 0.5               # surge／sway = gain × 誤差
         max_effort: float = 0.15
-        deadband: float = 0.02
-        tol: float = 0.1
+        min_effort: float = 0.1         # 要推就至少這麼多（約 2 N），低於這個 T200 不出力
+        deadband: float = 0.02          # 看不到時的移動：最後位置離畫面中央這麼近就不移
+        tol: float = 0.08               # 對準門檻 [drum 直徑]
+        target_size: float = 0.6        # drum 直徑 [m]，只用來把誤差換成公分給人看
         stable_s: float = 2.0
         seek_effort: float = 0.08       # 看不到時往最後看到的方向移的推力
         lost_timeout: float = 8.0
@@ -112,10 +136,12 @@ class CenterOver(Task):
         s = max(recent, key=lambda s: s.t, default=None)
         self.last_err = (s.offset_x, s.offset_y) if s else None
 
-    def drive(self, ex, ey, limit):
-        surge = 0.0 if abs(ey) < self.p.deadband else clamp(-self.p.gain * ey, limit)
-        sway = 0.0 if abs(ex) < self.p.deadband else clamp(self.p.gain * ex, limit)
-        return surge, sway
+    def effort(self, offset, err_d):
+        """一軸的推力：offset 是畫面上的偏移（決定方向、大小），err_d 是這軸的誤差 [drum 直徑]。"""
+        p = self.p
+        if abs(err_d) <= p.tol / 2:
+            return 0.0
+        return math.copysign(min(max(p.gain * abs(offset), p.min_effort), p.max_effort), offset)
 
     def step(self, snap):
         p = self.p
@@ -133,20 +159,23 @@ class CenterOver(Task):
             # 往最後看到的方向（不是 aim 的方向：目標在畫面邊緣掉的，往它那邊移才會回到畫面裡）
             lx, ly = self.last_err
             n = math.hypot(lx, ly)
-            if n < p.tol:
+            if n < p.deadband:
                 return stop
             self.feedback += '，往最後看到的方向移'
             return Command(-p.seek_effort * ly / n, p.seek_effort * lx / n, depth, self.yaw)
         self.seen_t = snap.now
         ex, ey = s.offset_x - p.aim_x, s.offset_y - p.aim_y
         self.last_err = (s.offset_x, s.offset_y)
-        err = math.hypot(ex, ey)
-        self.feedback = f'{s.label} 誤差 {err:.2f}（x {ex:+.2f}、y {ey:+.2f}）'
+        # 畫面上一個 drum 直徑 = offset 單位裡的 2 × width（x）、2 × height（y）
+        dx = ex / (2.0 * s.width) if s.width > 0 else math.inf
+        dy = ey / (2.0 * s.height) if s.height > 0 else math.inf
+        err = math.hypot(dx, dy)
+        cm = err * p.target_size * 100
+        self.feedback = f'{s.label} 誤差 {err:.3f} 直徑（約 {cm:.0f} cm；x {dx:+.3f}、y {dy:+.3f}）'
         if self.held(err <= p.tol, snap.now, p.stable_s):
-            return self.succeed(f'對準 {s.label}，誤差 {err:.2f}', stop)
+            return self.succeed(f'對準 {s.label}，誤差 {err:.3f} 直徑（約 {cm:.0f} cm）', stop)
         if self.elapsed(snap) > p.give_up_s:
-            return self.fail(f'{p.give_up_s:g} 秒內沒對準（誤差 {err:.2f}）', stop)
+            return self.fail(f'{p.give_up_s:g} 秒內沒對準（誤差約 {cm:.0f} cm）', stop)
         if err <= p.tol:
             return stop
-        surge, sway = self.drive(ex, ey, p.max_effort)
-        return Command(surge, sway, depth, self.yaw)
+        return Command(-self.effort(ey, dy), self.effort(ex, dx), depth, self.yaw)
