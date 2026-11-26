@@ -55,6 +55,8 @@ class Marker:
     recorder 把它錄進 rosbag，marker_log 把它寫進場次的 markers.csv。
     """
 
+    SETTLE_S = 0.3      # 訂閱者到齊後再等多久才發（見 wait_subscribers）
+
     def __init__(self, node, source):
         self.node = node
         self.source = source
@@ -68,10 +70,13 @@ class Marker:
 
         剛建立 publisher 時，recorder 還沒發現這個 topic，馬上發的標記會漏掉。
         DDS 的探索在背景執行緒跑，這裡不用 spin。
+        到齊後再等 SETTLE_S：發布端先看到訂閱者時，訂閱端可能還沒配對好，這時發的它收不到
+        （Jetson 上實測：mission 開始的標記 recorder 錄到了，marker_log 漏掉）。
         """
         end = time.monotonic() + timeout
         while self.subscribers() < MARKER_SUBSCRIBERS and time.monotonic() < end:
             time.sleep(0.05)
+        time.sleep(self.SETTLE_S)
         return self.subscribers()
 
     def __call__(self, text, wait=0.0):

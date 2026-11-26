@@ -183,3 +183,26 @@ def test_timeout_uses_snapshot_clock():
     now[0] = 2.5
     root.tick_once()
     assert root.status == BtStatus.FAILURE and r.running() is None     # 逾時 → 執行器被取消
+
+
+def test_confirm_countdown():
+    """--start-delay：檢查清單改成倒數，倒數完才成功；不要人確認又沒倒數時直接成功。"""
+    now = [0.0]
+    said = []
+    snap = lambda: Snapshot(now=now[0], depth=0.0, heading=0.0)     # noqa: E731
+    ctx = Context(snapshot=snap, start_delay=12, log=said.append)
+    root = build(read(bad({'type': 'Confirm', 'checklist': ['a']})), ctx)
+    root.tick_once()
+    assert root.status == BtStatus.RUNNING and root.feedback_message == '倒數 12 秒'
+    for t in (2.0, 7.5, 11.2):
+        now[0] = t
+        root.tick_once()
+        assert root.status == BtStatus.RUNNING
+    now[0] = 12.0
+    root.tick_once()
+    assert root.status == BtStatus.SUCCESS
+    assert said == ['12 秒後開始（歸零、解鎖、下潛）', '倒數 10 秒', '倒數 5 秒', '倒數 1 秒', '倒數結束，開始']
+
+    root = build(read(bad({'type': 'Confirm', 'checklist': ['a']})), Context(snapshot=snap, log=said.append))
+    root.tick_once()
+    assert root.status == BtStatus.SUCCESS

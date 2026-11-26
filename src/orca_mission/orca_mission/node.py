@@ -3,6 +3,8 @@
 
     ros2 run orca_mission mission gate_pass                      # 實機：開始前列檢查清單、等 Enter
     ros2 run orca_mission mission gate_pass --no-checklist       # 模擬
+    ros2 run orca_mission mission gate_pass --start-delay 60     # AUV 獨自跑：不等 Enter，倒數 60 秒才開始
+    ros2 run orca_mission mission gate_pass --print-checklist    # 只印出檢查清單（啟動前先在岸上確認）
     ros2 run orca_mission mission gate_pass -p depth=0.5 -p pass_s=6
 
 一個節點、一條執行緒（SingleThreadedExecutor），資料流：
@@ -119,7 +121,7 @@ def find_config(path):
 
 
 class MissionNode(Node):
-    def __init__(self, spec, cameras, limits, interactive, log_path):
+    def __init__(self, spec, cameras, limits, interactive, log_path, start_delay=0.0):
         super().__init__('mission')
         self.tree_name = spec.get('name', 'mission')
         self.vehicle = VehicleState()
@@ -150,7 +152,7 @@ class MissionNode(Node):
 
         ctx = Context(runner=self.runner, snapshot=lambda: self.snap,
                       zero=lambda: ZeroCall(self.zero_client), zero_here=self.vehicle.zero_here,
-                      interactive=interactive, log=self.say)
+                      interactive=interactive, start_delay=start_delay, log=self.say)
         self.tree = py_trees_ros.trees.BehaviourTree(build(spec, ctx))
         self.tree.setup(node=self, timeout=5.0)
 
@@ -311,6 +313,17 @@ def wait_surface(node, executor):
           flush=True)
 
 
+def checklist_items(node):
+    """樹（YAML 的 dict）裡所有 Confirm 節點的檢查清單，照出現順序。"""
+    items = []
+    if isinstance(node, dict):
+        if node.get('type') == 'Confirm':
+            items += [str(i) for i in node.get('checklist', [])]
+        for child in node.get('children', []):
+            items += checklist_items(child)
+    return items
+
+
 TERMINATED = False      # 收到 SIGTERM（docker stop）：收尾不等上浮
 
 
@@ -333,7 +346,11 @@ def main(argv=None):
     ap.add_argument('--log-dir', help='CSV 的資料夾，預設：環境變數 ORCA_LOG_DIR → 目前場次的 mission/ → /logs')
     ap.add_argument('--run-name', help='CSV 的檔名（不含 .csv）與標記裡的名稱，預設 <樹>_<時間>；'
                                        'deploy/*/mission.sh 用它讓 CSV、rosbag、標記同名')
+    ap.add_argument('--start-delay', type=float, default=0.0, metavar='秒',
+                    help='不列檢查清單、不等 Enter，改成倒數這麼多秒才開始（AUV 獨自跑：拔線、放船下水的時間）')
     ap.add_argument('--print-tree', action='store_true', help='只印出樹的結構，不執行')
+    ap.add_argument('--print-checklist', action='store_true',
+                    help='只印出樹裡的檢查清單（每行一項），不執行；deploy/jetson/mission.sh 啟動前在岸上列出來')
     args = ap.parse_args(argv if argv is not None else rclpy.utilities.remove_ros_args(sys.argv)[1:])
 
     try:
@@ -346,6 +363,13 @@ def main(argv=None):
     if args.print_tree:
         print(py_trees.display.unicode_tree(build(spec, None)))
         return 0
+    if args.print_checklist:
+        for item in checklist_items(spec['root']):
+            print(item)
+        return 0
+    if args.start_delay < 0:
+        print('--start-delay 不能是負的', file=sys.stderr)
+        return 2
 
     signal.signal(signal.SIGTSTP, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
@@ -355,7 +379,8 @@ def main(argv=None):
     os.makedirs(folder, exist_ok=True)
     run_name = args.run_name or time.strftime(f'{spec.get("name", "mission")}_%Y%m%d_%H%M%S')
     log_path = os.path.join(folder, f'{run_name}.csv')
-    node = MissionNode(spec, cameras, limits, not args.no_checklist, log_path)
+    interactive = not (args.no_checklist or args.start_delay > 0)
+    node = MissionNode(spec, cameras, limits, interactive, log_path, args.start_delay)
     executor = SingleThreadedExecutor()
     executor.add_node(node)
     print(f'行為樹 {path}\n{py_trees.display.unicode_tree(node.tree.root)}\n記錄到 {log_path}', flush=True)
@@ -367,7 +392,7 @@ def main(argv=None):
             executor.spin_once(timeout_sec=0.1)
     except KeyboardInterrupt:
         print()
-        node.end(False, 'Ctrl-C')
+        node.end(False, 'SIGTERM（./stop.sh、docker stop）' if TERMINATED else 'Ctrl-C')
     except Exception as e:
         traceback.print_exc()
         node.end(False, f'程式出錯：{type(e).__name__}: {e}')

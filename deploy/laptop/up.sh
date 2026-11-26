@@ -42,24 +42,6 @@ if [[ ! -f ../../ml/rfdetr/weights/checkpoint_best_total.pth ]]; then
   ../../ml/rfdetr/fetch_weights.sh
 fi
 
-# need_build <映像> <指紋>：要 build 就印原因並回傳 0
-need_build() {
-  local image=$1 want=$2 have
-  if (( FORCE )); then
-    echo "$image：--build，重 build"
-    return 0
-  fi
-  if ! have=$(docker image inspect -f '{{index .Config.Labels "orca.build-hash"}}' "$image" 2> /dev/null); then
-    echo "$image：映像不存在，build"
-    return 0
-  fi
-  if [[ $have != "$want" ]]; then
-    echo "$image：build 設定檔或 src/ 的檔案清單有變（指紋 ${have:-無} → $want），重 build"
-    return 0
-  fi
-  return 1
-}
-
 RECREATE=0    # orca-base、orca-perception 換了：用到它們的容器要重開
 if need_build orca-base "$ORCA_BASE_HASH"; then
   docker compose build fc_adapter                   # front_camera、fc_adapter、recorder、marker_log、gui_tools 共用
@@ -76,32 +58,9 @@ fi
 
 # ---------- 場次 ----------
 
-session_prepare
-SESSION=$(session_current)
-PREV=''       # 沒收尾的上一個場次
-NEW=0
-if [[ -n $SESSION ]]; then
-  if service_running recorder && [[ $(session_boot "$SESSION") == "$(boot_id)" ]]; then
-    echo "沿用場次 $SESSION"
-  else
-    PREV=$SESSION
-    SESSION=''
-  fi
-fi
+session_begin
 if [[ -n $PREV ]]; then
-  cat >&2 << EOF
-上一個場次 $PREV 沒有用 ./down.sh 收尾（直接 docker compose down、重開機或斷電）。
-補做還能補的：停止錄影、確認 bag 收尾，飛控連上後拍結束時的參數快照。容器的終端輸出已經沒辦法補存。
-飛控的 .BIN 之後用 ./fc_logs.sh fetch $PREV 拉（飛控上鎖時）。
-EOF
-  docker compose stop recorder marker_log > /dev/null 2>&1 || true
-  session_check_bags "$PREV" || true
-  session_close "$PREV" '沒有用 down.sh 收尾，由下一次 up.sh 補救：停止錄影；容器的終端輸出遺失'
-fi
-if [[ -z $SESSION ]]; then
-  SESSION=$(session_new)
-  NEW=1
-  echo "新場次 $SESSION，紀錄在 $PWD/$SESSION_ROOT/$SESSION/"
+  echo "上一個場次的飛控 .BIN 之後用 ./fc_logs.sh fetch $PREV 拉（飛控上鎖時）。" >&2
 fi
 
 # 這個版本之前建立的 fc_adapter 沒掛 logs/session/，要重開一次
@@ -122,16 +81,7 @@ wait_for '相機' 60 'RPi 的 cam-relay 在跑嗎？看 docker compose logs fron
 wait_for '偵測' 300 '模型載入失敗？看 docker compose logs object_detector' has_topic /detections
 wait_for '開始錄影' 30 '看 docker compose logs recorder' session_recording "$SESSION"
 
-if [[ ! -f $SESSION_ROOT/$SESSION/info/fc_params_start.parm ]]; then
-  session_fc_params "$SESSION" fc_params_start.parm \
-    || echo '開始時的飛控參數快照沒拍到，下次 ./up.sh 會再試' >&2
-fi
-if [[ -n $PREV ]]; then
-  if session_fc_params "$PREV" fc_params_end.parm \
-       '（上一個場次沒收尾，由下一個場次的 up.sh 補拍；兩個場次之間改過參數的話不準）'; then
-    session_close "$PREV" '補拍結束時的飛控參數快照（info/fc_params_end.parm）'
-  fi
-fi
+session_after_ready
 if (( NEW )); then
   if session_fc_logs_start "$SESSION"; then
     echo "飛控 SD 卡上已有 $(wc -l < "$SESSION_ROOT/$SESSION/info/fc_logs_start.txt") 個 .BIN，收工時只拉這個場次新增的"
