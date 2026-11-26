@@ -15,6 +15,9 @@
 
 看門狗：超過 CMD_TIMEOUT_S 沒收到 /auv_control（上層當掉、被強制結束）就送中位，
 不切模式、不上鎖，也不重送目標；在 ALT_HOLD 下就是停在原地維持深度。收到新指令就恢復。
+停超過 CMD_DISARM_S 而且飛控還解鎖著，就送上鎖（每秒重試到上鎖為止），船浮上來：
+AUV 獨自在水裡時沒有人能按 Ctrl-C，上層被強制結束（沒走收尾）時要靠這裡。
+mavros 或 adapter 自己掛掉的話，由飛控的 FS_PILOT_INPUT（停送 MANUAL_CONTROL 3 秒就上鎖）接手。
 還沒收到任何指令前只送中位，不動模式、不解鎖。
 Ctrl-C 結束時送中位並上鎖。Ctrl-Z 也當成 Ctrl-C 處理。
 
@@ -40,6 +43,7 @@ RATE_HZ = 20          # MANUAL_CONTROL 的發送頻率；停送超過 FS_PILOT_T
 RETRY_S = 1.0         # 模式沒切成功時，隔多久再送一次
 TARGET_RESEND_S = 1.0
 CMD_TIMEOUT_S = 0.5   # 上層都是 20 Hz 發送，連掉 10 筆才算逾時
+CMD_DISARM_S = 5.0    # 停送多久、飛控還解鎖著就上鎖
 
 MODE_NAMES = {
     AuvControl.MODE_MANUAL: 'MANUAL',
@@ -73,6 +77,7 @@ class Adapter(Node):
         self.yaw0 = None            # 歸零時的航向（ENU, rad）
         self.busy = {'mode': False, 'arm': False}   # 服務呼叫還沒回覆
         self.last_mode_try = 0.0
+        self.last_disarm_try = 0.0  # 看門狗上鎖的上一次嘗試
         self.sent = {}              # 'depth'／'yaw' → (上次送的目標, 時間)
 
         self.pub = self.create_publisher(ManualControl, '/mavros/manual_control/send', 10)
@@ -167,8 +172,13 @@ class Adapter(Node):
             if not self.stale:
                 self.stale = True
                 self.get_logger().warn(f'超過 {CMD_TIMEOUT_S} 秒沒收到 /auv_control，'
-                                       '送中位（不切模式、不上鎖）')
+                                       f'送中位；{CMD_DISARM_S:.0f} 秒還沒恢復就上鎖')
             c = None
+            if (now - self.cmd_time > CMD_DISARM_S and self.state.armed
+                    and not self.busy['arm'] and now - self.last_disarm_try >= RETRY_S):
+                self.last_disarm_try = now
+                self.get_logger().warn(f'超過 {CMD_DISARM_S:.0f} 秒沒收到 /auv_control，上鎖')
+                self.call(self.arming, CommandBool.Request(value=False), 'arm')
         self.pub.publish(self.manual_control(c))
         if c is None:
             return

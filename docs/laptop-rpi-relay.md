@@ -1,6 +1,6 @@
-# 筆電跑 ROS、RPi 轉接（現行做法）
+# 筆電跑 ROS、RPi 轉接（舊機體）
 
-ROS 2 節點全部跑在筆電，RPi 不跑 ROS，只負責把相機和飛控「接出來」。之後主電腦定案時，整套搬到那台（見 [architecture.md](architecture.md) 的「部署」）。
+ROS 2 節點全部跑在筆電，RPi 不跑 ROS，只負責把相機和飛控「接出來」。舊機體（CUAV V5）用這個做法；新機體的主電腦是 Jetson，見 [jetson.md](jetson.md)。
 
 ```
              RPi（不跑 ROS）                         筆電（deploy/laptop，ROS 2 Humble）
@@ -38,7 +38,7 @@ RPi 上 mavproxy.service 的三個輸出：`udp:127.0.0.1:14570` 給 bcast-relay
 
 ## 筆電端
 
-日常的指令（開工、檢查飛控、過門、鍵盤、看畫面、標記、收工）在 [README 的「實機」](../README.md#實機)。以下是不常用的：
+日常的指令（開工、檢查飛控、過門、鍵盤、看畫面、標記、收工）在 [README 的「實機（筆電＋RPi）」](../README.md#實機筆電rpi)。以下是不常用的：
 
 ```bash
 cd deploy/laptop

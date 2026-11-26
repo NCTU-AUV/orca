@@ -1,7 +1,7 @@
 # deploy/<跑法>/ 的腳本共用的函式，用 source 載入（目前目錄要是 deploy/<跑法>/）：
 #   source ../common.sh
 #
-# 場次（session）= 一次下水的全部紀錄，從 ./up.sh 開始到 ./down.sh 結束。目前只有 deploy/laptop 用
+# 場次（session）= 一次下水的全部紀錄，從 ./up.sh 開始到 ./down.sh 結束。deploy/laptop、deploy/jetson 用
 #（模擬還是一次任務錄一個 bag，見 docs/sim/README.md），寫成跟跑法無關，之後模擬也能直接用。
 # 用到這些函式的 compose 要有 fc_adapter、recorder、marker_log 服務，並把 ./logs/session 掛在 /sessions。
 #
@@ -16,7 +16,7 @@
 #     bag_<時間>/                    全程 rosbag：recorder 每次啟動一個資料夾，每 5 分鐘切一個 .mcap
 #     markers.csv                    標記（時間、來源、內容），同樣的標記也錄在 bag 的 /session/marker
 #     mission/、pool_tests/          行為樹、水池測試腳本的 CSV
-#     fc_logs/<編號>.BIN             這個場次的飛控 DataFlash（down.sh 經 RPi 拉回來的）
+#     fc_logs/<編號>.BIN             這個場次的飛控 DataFlash（deploy/laptop 的 down.sh 經 RPi 拉回來的；Jetson 還沒做）
 #     fc_logs/<編號>/<類型>.csv      .BIN 轉成的 CSV，加上 ros_time（./fc_logs.sh csv）
 #     containers.log                 各容器的終端輸出（down.sh 存的）
 #     slices/                        ./slice.sh 切出來的片段
@@ -55,6 +55,27 @@ fcu_connected() {
   [[ $state == *'connected: true'* ]]
 }
 has_topic() { in_adapter timeout 5 ros2 topic echo --once "$1" > /dev/null; }
+
+# ---------- build ----------
+
+# need_build <映像> <指紋>：要 build 就印原因並回傳 0。FORCE=1（up.sh --build）時一律 build。
+# 過期的判斷：映像的 orca.build-hash label 跟 docker/build-hash.sh 現在算的不同
+need_build() {
+  local image=$1 want=$2 have
+  if (( ${FORCE:-0} )); then
+    echo "$image：--build，重 build"
+    return 0
+  fi
+  if ! have=$(docker image inspect -f '{{index .Config.Labels "orca.build-hash"}}' "$image" 2> /dev/null); then
+    echo "$image：映像不存在，build"
+    return 0
+  fi
+  if [[ $have != "$want" ]]; then
+    echo "$image：build 設定檔或 src/ 的檔案清單有變（指紋 ${have:-無} → $want），重 build"
+    return 0
+  fi
+  return 1
+}
 
 # ---------- 場次 ----------
 
@@ -152,6 +173,55 @@ session_check_bags() {
     fi
   done
   return "$bad"
+}
+
+# session_begin：up.sh 用，決定這次的場次，設定全域變數 SESSION、PREV、NEW：
+# - 有場次而且 recorder 還在錄、沒重開過機 → 沿用（NEW=0）
+# - 有場次但 recorder 沒在跑、或中間重開過機 → 上一個場次（PREV）沒收尾：停錄影、確認 bag，開新場次
+# - 沒有場次 → 開新場次（NEW=1）
+# 上一個場次結束時的參數快照要等飛控連上才拍（session_after_ready）
+session_begin() {
+  session_prepare
+  SESSION=$(session_current)
+  PREV=''
+  NEW=0
+  if [[ -n $SESSION ]]; then
+    if service_running recorder && [[ $(session_boot "$SESSION") == "$(boot_id)" ]]; then
+      echo "沿用場次 $SESSION"
+    else
+      PREV=$SESSION
+      SESSION=''
+    fi
+  fi
+  if [[ -n $PREV ]]; then
+    cat >&2 << EOF
+上一個場次 $PREV 沒有用 ./down.sh 收尾（直接 docker compose down、重開機或斷電）。
+補做還能補的：停止錄影、確認 bag 收尾，飛控連上後拍結束時的參數快照。容器的終端輸出已經沒辦法補存。
+EOF
+    docker compose stop recorder marker_log > /dev/null 2>&1 || true
+    session_check_bags "$PREV" || true
+    session_close "$PREV" '沒有用 down.sh 收尾，由下一次 up.sh 補救：停止錄影；容器的終端輸出遺失'
+  fi
+  if [[ -z $SESSION ]]; then
+    SESSION=$(session_new)
+    NEW=1
+    echo "新場次 $SESSION，紀錄在 $PWD/$SESSION_ROOT/$SESSION/"
+  fi
+}
+
+# session_after_ready：up.sh 在服務就緒（飛控連上）之後呼叫：拍開始時的參數快照，
+# 補拍上一個場次（PREV）結束時的參數快照
+session_after_ready() {
+  if [[ ! -f $SESSION_ROOT/$SESSION/info/fc_params_start.parm ]]; then
+    session_fc_params "$SESSION" fc_params_start.parm \
+      || echo '開始時的飛控參數快照沒拍到，下次 ./up.sh 會再試' >&2
+  fi
+  if [[ -n $PREV ]]; then
+    if session_fc_params "$PREV" fc_params_end.parm \
+         '（上一個場次沒收尾，由下一個場次的 up.sh 補拍；兩個場次之間改過參數的話不準）'; then
+      session_close "$PREV" '補拍結束時的飛控參數快照（info/fc_params_end.parm）'
+    fi
+  fi
 }
 
 # ---------- 飛控的 DataFlash（.BIN）----------

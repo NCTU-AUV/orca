@@ -15,5 +15,8 @@ setup(
     maintainer='NCTU-AUV',
     description='Object detection node (RF-DETR)',
     license='Apache-2.0',
-    entry_points={'console_scripts': ['detector = orca_perception.detector:main']},
+    entry_points={'console_scripts': [
+        'detector = orca_perception.detector:main',
+        'build_engine = orca_perception.rfdetr_trt:main',   # ONNX → 這台的 TensorRT 引擎（Jetson）
+    ]},
 )

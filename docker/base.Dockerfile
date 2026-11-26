@@ -1,5 +1,6 @@
 # orca-base：ROS 2 Humble + mavros + OpenCV + orca workspace。
-# bridge、cam_bridge、recorder、tools 共用。build context 是 repo 根目錄（見 .dockerignore）。
+# bridge、cam_bridge、recorder、tools 共用；Jetson 的相機（realsense2_camera）、foxglove_bridge 也在這裡。
+# build context 是 repo 根目錄（見 .dockerignore）。
 FROM ros:humble
 
 SHELL ["/bin/bash", "-c"]
@@ -11,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-rqt-image-view \
         ros-humble-compressed-image-transport \
         ros-humble-rosbag2-storage-mcap \
+        ros-humble-realsense2-camera \
+        ros-humble-foxglove-bridge \
         python3-opencv \
         python3-pygame \
         wget \

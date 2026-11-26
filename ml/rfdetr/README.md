@@ -15,6 +15,8 @@ RF-DETR Large（DINOv2 small windowed backbone，輸入解析度 704），8 類�
 | 路徑 | 內容 |
 |---|---|
 | `fetch_weights.sh` | 從 GitHub Releases（tag `rfdetr-v2`）下載 `checkpoint_best_total.pth` 到 `weights/`，並檢查 sha256 |
+| `export_onnx.sh` | 匯出 ONNX 給 Jetson 轉 TensorRT（`weights/rfdetr-large.onnx`、`.json`），並跟 PyTorch 版比對（`check_export.py`）。見 [docs/jetson.md](../../docs/jetson.md#偵測tensorrt) |
+| `check_export.py` | 比對 ONNX／TensorRT 跟 PyTorch 版的偵測結果 |
 | `config/training_config.json` | 完整的訓練與模型設定，含 `class_names` |
 | `config/hparams.yaml`、`config/run_config.json` | 訓練參數 |
 | `config/metrics.csv` | 每個 epoch 的指標 |
@@ -37,7 +39,7 @@ ONNX（`model.export()`，輸入 `[1,3,704,704]`，輸出 `dets [1,300,4]`、`la
 - 25W 模式把 GPU 鎖在 408 MHz，一定要切 MAXN（`sudo nvpmodel -m 0`）並跑 `sudo jetson_clocks`。這台目前刷的不是 Super 版，沒有 40W／MAXN_SUPER（1173 MHz）。
 - 匯出 ONNX 只需要 CPU 版 torch；PyPI 的 aarch64 torch 會拉 CUDA 13 的套件，在 Jetson 上用不到。
 - 前視相機固定 15 fps（見 [docs/architecture.md](../../docs/architecture.md#幀率)）。
-- 這次的推論、串流腳本只在 Jetson 的 `~/rfdetr_jetson/`，還沒收進 repo；Jetson 版的偵測 Dockerfile 也還沒寫。
+- 上面是 `~/rfdetr_jetson/` 的獨立腳本量的。repo 裡的 Jetson 版（`deploy/jetson`，TensorRT Python API、numpy 前後處理）見 [docs/jetson.md](../../docs/jetson.md#偵測tensorrt)。
 
 ## 在本機跑
 

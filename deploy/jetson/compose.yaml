@@ -1,0 +1,175 @@
+# Jetson（Orin NX、JetPack 6）：AUV 獨自跑。相機、飛控都直接插在 Jetson 上，所有 ROS 節點都在這台，
+# ROS_LOCALHOST_ONLY=1，DDS 不出網路。筆電只在岸上用：ssh 進來下指令、看畫面（Foxglove）、拉紀錄。
+# 下水時網路線拔掉，船上的東西都不依賴筆電。
+#
+# 在 Jetson 上（筆電：ssh -t orin，再 cd ~/workspace/orca/deploy/jetson）：
+#   ./up.sh                    # 開場次（或沿用）、起服務、開始全程錄影，等飛控、相機、偵測就緒
+#   ./mission.sh               # 啟動任務：岸上列檢查清單、按 Enter，任務在背景倒數後開始，倒數期間拔線放船下水
+#   ./stop.sh                  # 中止任務（上鎖，船浮上來）
+#   ./down.sh                  # 收工：場次收尾再全部關掉，不要直接 docker compose down
+# 開機自動起服務：./autostart.sh enable（見該檔）。
+#
+# 服務：
+#   camera           realsense2_camera 直接讀 D435i → /camera/camera/color/*（跟筆電轉接時的 topic 一樣）
+#   object_detector  RF-DETR（TensorRT FP16）：影像 → /detections
+#   fc_adapter       飛控介面：mavros（USB 直插，mavros_serial.yaml）+ auv_adapter
+#   recorder         全程把所有 topic 錄成 rosbag（MCAP），錄進目前場次
+#   marker_log       把標記（/session/marker）寫進目前場次的 markers.csv
+#   foxglove         foxglove_bridge（只聽 127.0.0.1:8765），筆電用 ssh 轉埠連進來看（../../tools/foxglove/）
+#   mission          行為樹決策層。不隨 up 啟動，由 ./mission.sh 在背景啟動（容器名稱 orca-mission）
+#   gui_tools        回放與切片 rosbag 等臨時工具（沒有畫面；名稱跟 deploy/laptop 一樣，共用的腳本才找得到）
+# 紀錄：logs/session/<場次>/，結構同 deploy/laptop（見 deploy/common.sh 檔頭）。
+name: orca
+
+x-ros: &ros
+  network_mode: host
+  # Fast DDS 在同一台機器上走共享記憶體（/dev/shm）；容器各自有 /dev/shm 時
+  # 互相看得到 topic 卻收不到資料，所以全部共用主機的 IPC
+  ipc: host
+  init: true
+  environment: &ros-env
+    ROS_LOCALHOST_ONLY: "1"
+    ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+
+x-base: &base
+  image: orca-base
+  build:
+    context: ../..
+    dockerfile: docker/base.Dockerfile
+    labels:
+      orca.build-hash: ${ORCA_BASE_HASH:-}
+
+services:
+  # D435i 彩色 640x480@15（解析度跟筆電轉接時一樣，下游的相機參數不用改；15 fps 的理由見
+  # docs/architecture.md 的「幀率」）。深度先不開：
+  # 用不到，而且 recorder 會把沒壓縮的深度影像錄進去。
+  # privileged + /dev：USB 相機重新列舉（拔插、librealsense 重設）後裝置節點會變，要整個 /dev 才跟得上
+  camera:
+    <<: [*ros, *base]
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /dev:/dev
+    command:
+      - ros2
+      - launch
+      - realsense2_camera
+      - rs_launch.py
+      - camera_namespace:=camera
+      - camera_name:=camera
+      - enable_color:=true
+      - enable_depth:=false
+      - enable_infra1:=false
+      - enable_infra2:=false
+      - enable_gyro:=false
+      - enable_accel:=false
+      - rgb_camera.color_profile:=640,480,15
+
+  # RF-DETR（TensorRT）：影像 → /detections、/detections/image（畫好框；.../compressed 是 JPEG）。
+  # weights 給 ONNX，節點載入這台對應的引擎（rfdetr-large.<GPU>.trt<版本>.fp16.engine），
+  # 引擎由 up.sh 第一次跑時轉（ros2 run orca_perception build_engine，幾分鐘），存在 ml/rfdetr/weights/
+  object_detector:
+    <<: *ros
+    image: orca-perception-jetson
+    build:
+      context: ../..
+      dockerfile: docker/perception-jetson.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_PERCEPTION_JETSON_HASH:-}
+    runtime: nvidia
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../ml/rfdetr/weights:/model
+      - ../../ml/rfdetr:/rfdetr:ro                  # check_export.py（驗證引擎）
+      - ../../docs/sim/reference:/images:ro         # 驗證用的影像
+    command: [ros2, run, orca_perception, detector, --ros-args, -p, weights:=/model/rfdetr-large.onnx]
+
+  # mavros + auv_adapter（/auv_control）。飛控 USB 直插（mavros_serial.yaml 用 /dev/serial/by-id/ 的名稱）。
+  # /dev 整個掛進來加上 ttyACM（major 166）的權限：飛控重開機、USB 重新列舉後 ttyACM 的編號可能會變
+  fc_adapter:
+    <<: [*ros, *base]
+    restart: unless-stopped
+    device_cgroup_rules:
+      - 'c 166:* rmw'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /dev:/dev
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../tools:/orca/tools:ro
+      - ./logs/session:/sessions
+      - ./logs/no_session:/logs
+    stop_grace_period: 20s
+    command: [bash, /opt/orca_ws/install/orca_bridge/share/orca_bridge/bridge.sh, serial]
+
+  # 全程錄影，同 deploy/laptop（說明見那邊）。不錄沒壓縮的影像
+  recorder:
+    <<: [*ros, *base]
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 15s
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./logs/session:/sessions
+    command:
+      - bash
+      - -c
+      - >-
+        until s=$$(cat /sessions/current 2>/dev/null) && [ -n "$$s" ]; do
+        echo '還沒有場次（logs/session/current），等 ./up.sh 建立'; sleep 5; done;
+        exec ros2 bag record -a -s mcap --max-bag-duration 300
+        -x '^(/camera/camera/color/image_raw|/bottom_camera/image_raw|/detections/image|/detections/bottom_image)$$'
+        -o "/sessions/$$s/bag_$$(date +%Y%m%d_%H%M%S)"
+
+  marker_log:
+    <<: [*ros, *base]
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ./logs/session:/sessions
+    command: [ros2, run, orca_session, marker_log]
+
+  # 筆電看畫面：deploy/jetson/view.sh（在筆電上跑，ssh 轉埠），Foxglove 開 ws://localhost:8765。
+  # 只聽 127.0.0.1，不對外開埠
+  foxglove:
+    <<: [*ros, *base]
+    restart: unless-stopped
+    command: [ros2, launch, foxglove_bridge, foxglove_bridge_launch.xml, address:=127.0.0.1, port:=8765]
+
+  # 行為樹。由 ./mission.sh 用 docker compose run -d --name orca-mission 在背景啟動（ssh 斷線也繼續跑）；
+  # 結束後容器留著（看輸出：docker logs orca-mission），下一次 ./mission.sh 才刪掉。
+  # 中止：./stop.sh（SIGTERM → MANUAL＋DISARM）
+  mission:
+    <<: *ros
+    image: orca-mission
+    build:
+      context: ../..
+      dockerfile: docker/mission.Dockerfile
+      labels:
+        orca.build-hash: ${ORCA_MISSION_HASH:-}
+    profiles: [mission]
+    environment:
+      <<: *ros-env
+      ORCA_TREES_DIR: /opt/orca_ws/src/orca_mission/trees
+      ORCA_MISSION_CONFIG_DIR: /opt/orca_ws/src/orca_mission/config
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ./logs/session:/sessions
+      - ./logs/no_session:/logs
+    stop_grace_period: 10s
+    command: [mission, gate_pass]
+
+  # 臨時工具（沒有畫面）：切片（./slice.sh）、回放、ros2 topic 等
+  #   docker compose run --rm gui_tools ros2 topic hz /detections
+  gui_tools:
+    <<: [*ros, *base]
+    profiles: [tools]
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ../../src:/opt/orca_ws/src:ro
+      - ../../tools:/orca/tools:ro
+      - ./logs/session:/sessions

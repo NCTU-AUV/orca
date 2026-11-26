@@ -7,6 +7,7 @@
 
 節點透過 Context 拿資料、下指令；Context 由 node.py 提供（測試時用假的）。
 """
+import math
 import threading
 import time
 
@@ -25,13 +26,14 @@ class Context:
     zero        () → 物件，有 done()、result() → (成功與否, 訊息)；呼叫 /auv_adapter/zero
     zero_here   () → None；歸零成功後馬上呼叫，跟 adapter 同時記零點
     interactive 是否要人確認檢查清單（模擬時 false）
+    start_delay 不要人確認時，檢查清單改成倒數幾秒（Jetson：拔掉網路線、放船下水的時間）；0 是不等
     log         (str) → None
     """
 
     def __init__(self, runner=None, snapshot=None, zero=None, zero_here=None,
-                 interactive=False, log=print):
+                 interactive=False, start_delay=0.0, log=print):
         self.runner, self.snapshot, self.zero, self.zero_here = runner, snapshot, zero, zero_here
-        self.interactive, self.log = interactive, log
+        self.interactive, self.start_delay, self.log = interactive, start_delay, log
 
 
 class Leaf(py_trees.behaviour.Behaviour):
@@ -112,12 +114,22 @@ class WaitReady(Leaf):
 
 
 class Confirm(Leaf):
-    """列出檢查清單，等人按 Enter（interactive 為 false 時直接成功）。"""
+    """列出檢查清單，等人按 Enter。interactive 為 false 時不問：有 start_delay 就倒數那麼多秒，沒有就直接成功。
+
+    倒數給 AUV 獨自跑用（deploy/jetson/mission.sh）：檢查清單在岸上、啟動任務前就確認過了，
+    任務在背景跑，倒數期間拔掉網路線、放船下水，倒數完才歸零、解鎖。
+    """
     PARAMS = {'checklist': []}
+    SAY_EVERY = 10      # 倒數時每幾秒說一次；最後 5 秒每秒說
 
     def initialise(self):
         self.answer = None
+        self.deadline = None
         if not self.ctx.interactive:
+            if self.ctx.start_delay > 0:
+                self.deadline = self.ctx.snapshot().now + self.ctx.start_delay
+                self.said = None
+                self.ctx.log(f'{self.ctx.start_delay:.0f} 秒後開始（歸零、解鎖、下潛）')
             return
         lines = ['開始前確認：'] + [f'  - {item}' for item in self.params['checklist']]
         print('\n'.join(lines), flush=True)
@@ -131,6 +143,16 @@ class Confirm(Leaf):
         threading.Thread(target=ask, daemon=True).start()
 
     def update(self):
+        if self.deadline is not None:
+            left = math.ceil(self.deadline - self.ctx.snapshot().now)
+            if left > 0:
+                self.feedback_message = f'倒數 {left} 秒'
+                if left != self.said and (left % self.SAY_EVERY == 0 or left <= 5):
+                    self.said = left
+                    self.ctx.log(f'倒數 {left} 秒')
+                return BtStatus.RUNNING
+            self.ctx.log('倒數結束，開始')
+            return BtStatus.SUCCESS
         if not self.ctx.interactive or self.answer:
             return BtStatus.SUCCESS
         if self.answer is False:

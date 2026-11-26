@@ -1,5 +1,6 @@
 # 算各映像的 build 指紋，給 compose 的 build.labels（orca.build-hash）用。用 source 載入：
-#   source docker/build-hash.sh   # export ORCA_BASE_HASH、ORCA_MISSION_HASH、ORCA_PERCEPTION_HASH
+#   source docker/build-hash.sh   # export ORCA_BASE_HASH、ORCA_MISSION_HASH、ORCA_PERCEPTION_HASH、
+#                                 #        ORCA_PERCEPTION_JETSON_HASH
 #
 # 映像上的 orca.build-hash 跟現在算出來的不同，就表示要重 build（deploy/laptop/up.sh 這樣判斷）。
 # 指紋只包含「改了就要重 build」的東西：
@@ -37,7 +38,8 @@ ORCA_BASE_HASH=$(_orca_image_hash '' docker/base.Dockerfile docker/entrypoint.sh
 # orca-mission 疊在 orca-base 上：orca-base 的輸入變了，它也要重 build
 ORCA_MISSION_HASH=$(_orca_image_hash "$ORCA_BASE_HASH" docker/mission.Dockerfile)
 ORCA_PERCEPTION_HASH=$(_orca_image_hash '' docker/perception-x86.Dockerfile docker/entrypoint.sh .dockerignore)
-export ORCA_BASE_HASH ORCA_MISSION_HASH ORCA_PERCEPTION_HASH
+ORCA_PERCEPTION_JETSON_HASH=$(_orca_image_hash '' docker/perception-jetson.Dockerfile docker/entrypoint.sh .dockerignore)
+export ORCA_BASE_HASH ORCA_MISSION_HASH ORCA_PERCEPTION_HASH ORCA_PERCEPTION_JETSON_HASH
 
 unset -f _orca_sum _orca_image_hash
 unset _orca_root _orca_src

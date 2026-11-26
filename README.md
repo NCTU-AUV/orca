@@ -20,7 +20,36 @@ NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的自主水下載具 **Orca**
 
 每個區塊從 repo 根目錄開始，照順序貼就能跑。實機與模擬的 `fc_adapter` 都綁 UDP 14551，不能同時跑。
 
-### 實機
+### Jetson（AUV 獨自跑）
+
+新機體用。程式在筆電上改，同步到 Jetson 跑；第一次設定見 [docs/jetson.md](docs/jetson.md)。
+
+```bash
+deploy/jetson/sync.sh                    # 筆電：程式同步到 Jetson（改了程式就要跑）
+ssh -t orin                              # 進 Jetson，以下在 Jetson 上
+cd ~/workspace/orca/deploy/jetson
+./up.sh                                  # 開工：開場次、起服務、開始全程錄影，等飛控、相機、偵測就緒
+./mission.sh                             # 過門（gate_pass）：列檢查清單、按 Enter，背景倒數 60 秒後開始；倒數時拔線放船下水
+./mission.sh gate_pass_yaw --delay 90    # 換一棵樹、倒數 90 秒
+./mission.sh gate_pass -p depth=0.5      # -p 覆寫樹的參數
+./stop.sh                                # 中止任務：上鎖，船浮上來
+docker logs -f orca-mission              # 看任務的輸出（重新連上之後）
+./mark.sh 第2趟                           # 插一筆標記
+./down.sh                                # 收工：場次收尾再全部關掉
+```
+
+在筆電上（repo 根目錄），另開終端機：
+
+```bash
+deploy/jetson/view.sh                    # 轉埠，Foxglove 開 ws://localhost:8765 看即時畫面（影像開 .../compressed）
+deploy/jetson/pull.sh                    # 場次紀錄拉回筆電的 deploy/jetson/logs/session/
+```
+
+拔線後沒辦法中止，只能靠樹的逾時和 kill switch。任務結束、逾時、出錯都會上鎖，船浮上來。
+
+### 實機（筆電＋RPi）
+
+舊機體用：ROS 跑在筆電，RPi 轉接相機和飛控。
 
 ```bash
 cd deploy/laptop
@@ -76,12 +105,13 @@ docker compose logs -f fc_adapter        # mavros、auv_adapter 的輸出
 
 | 要看什麼 | 文件 |
 |---|---|
-| 實機：RPi 端的設定、啟動與收工流程、紀錄，以及不常用的指令（水池測試、切片、飛控 `.BIN`） | [docs/laptop-rpi-relay.md](docs/laptop-rpi-relay.md) |
+| Jetson：第一次設定、TensorRT、任務怎麼在背景跑、實測數字、踩過的坑 | [docs/jetson.md](docs/jetson.md) |
+| 實機（筆電＋RPi）：RPi 端的設定、啟動與收工流程、紀錄，以及不常用的指令（水池測試、切片、飛控 `.BIN`） | [docs/laptop-rpi-relay.md](docs/laptop-rpi-relay.md) |
 | 模擬：需求、世界、服務，不常用的指令（隨機佈局、水下效果、水池測試）、驗收、排錯 | [docs/sim/README.md](docs/sim/README.md) |
 | SAUVC 2027 的場地、道具、計分、偵測驗證的結果 | [docs/sim/world-2027.md](docs/sim/world-2027.md) |
 | 行為樹：架構、怎麼寫一棵樹、參數 | [src/orca_mission/README.md](src/orca_mission/README.md) |
 | 自己寫上層控制：以 20 Hz 發 `/auv_control`（欄位見 [`AuvControl.msg`](src/orca_msgs/msg/AuvControl.msg) 的註解），下水時呼叫 `/auv_adapter/zero` 歸零 | [docs/architecture.md](docs/architecture.md) |
-| 不經 ROS 直接跑偵測模型、重新訓練 | [ml/rfdetr/README.md](ml/rfdetr/README.md) |
+| 不經 ROS 直接跑偵測模型、重新訓練、匯出 ONNX | [ml/rfdetr/README.md](ml/rfdetr/README.md) |
 | 改飛控參數：實機改完存回 `real.parm`，影響控制的參數同步到 `sitl.parm` | [firmware/ardusub/README.md](firmware/ardusub/README.md) |
 | 舊的計畫書、需求書（已完成，只留參考） | [docs/archive/](docs/archive/) |
 
@@ -93,7 +123,7 @@ docker compose logs -f fc_adapter        # mavros、auv_adapter 的輸出
 | `src/orca_msgs/` | 自訂介面。所有 package 都依賴它，改介面時相關程式在同一個 commit 一起改 |
 | `src/orca_bridge/` | `/auv_control` → mavros → ArduSub；mavros 設定依連線方式分成 `rpi_relay`、`sitl`、`serial` |
 | `src/orca_cam_bridge/` | 接收 RPi 轉出的相機影像，發布成跟 `realsense2_camera` 一樣的 topic（只有 RPi 轉接時用） |
-| `src/orca_perception/` | 物件偵測節點（RF-DETR），前視、底部相機共用一個模型 |
+| `src/orca_perception/` | 物件偵測節點（RF-DETR），前視、底部相機共用一個模型；筆電用 PyTorch，Jetson 用 TensorRT |
 | `src/orca_mission/` | 行為樹決策層：任務流程寫在 `trees/*.yaml`（旁邊有產生出來的流程圖 `.md`），見 [README](src/orca_mission/README.md) |
 | `src/orca_session/` | 場次紀錄的共用部分：紀錄放哪裡、標記（`/session/marker`、`markers.csv`）、飛控參數快照、rosbag 切片。實機的 `deploy/laptop/*.sh` 透過 [`deploy/common.sh`](deploy/common.sh) 使用 |
 | `sim/` | Gazebo 世界與模型、自寫的 gz 外掛、SITL 啟動腳本 |

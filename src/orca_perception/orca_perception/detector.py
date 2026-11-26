@@ -18,6 +18,12 @@
 
 參數：weights（/model/checkpoint_best_total.pth）、threshold（0.4）、
       image_topics、annotated_topics、publish_image（true）、jpeg_quality（80）
+
+推論後端看 weights 的副檔名：
+  .pth    PyTorch（rfdetr 套件），筆電（deploy/laptop、deploy/sim）
+  .onnx   TensorRT（orca_perception/rfdetr_trt.py），Jetson（deploy/jetson）。實際載入的是這台對應的引擎檔，
+          要先用 build_engine 轉好（deploy/jetson/up.sh 會做）
+兩種的前後處理一樣，結果只差在 FP16 的數值誤差（ml/rfdetr/check_export.py 驗證）。
 """
 
 import time
@@ -25,17 +31,39 @@ import time
 import cv2
 import numpy as np
 import rclpy
-from PIL import Image as PILImage
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
-from rfdetr import RFDETRLarge
 from sensor_msgs.msg import CompressedImage, Image
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 
 # 每個類別一個框色（BGR）
 COLORS = [(0, 200, 0), (0, 255, 255), (0, 128, 255), (0, 0, 255),
           (0, 220, 220), (255, 80, 0), (60, 20, 220), (200, 100, 0)]
+
+
+class TorchModel:
+    """PyTorch 版（rfdetr 套件），介面同 rfdetr_trt.TrtModel：predict(rgb, threshold)、class_names。"""
+
+    def __init__(self, weights):
+        from rfdetr import RFDETRLarge
+        self.model = RFDETRLarge(pretrain_weights=weights, num_classes=8)
+        self.class_names = self.model.class_names
+
+    def predict(self, rgb, threshold):
+        from PIL import Image as PILImage
+        return self.model.predict(PILImage.fromarray(rgb), threshold=threshold)
+
+
+def load_model(weights):
+    if weights.endswith('.onnx'):
+        from orca_perception import rfdetr_trt
+        engine = rfdetr_trt.engine_path(weights)
+        try:
+            return rfdetr_trt.TrtModel(engine)
+        except FileNotFoundError:
+            raise RuntimeError(f'沒有 {engine}：先跑 ros2 run orca_perception build_engine {weights}') from None
+    return TorchModel(weights)
 
 
 class Detector(Node):
@@ -53,7 +81,7 @@ class Detector(Node):
         self.jpeg_quality = int(self.declare_parameter('jpeg_quality', 80).value)
 
         self.get_logger().info(f'loading {weights} ...')
-        self.model = RFDETRLarge(pretrain_weights=weights, num_classes=8)
+        self.model = load_model(weights)
         # predict() 的 class_id 是 class_names 的 0 起算索引
         self.names = list(self.model.class_names)
         self.get_logger().info(f'classes: {self.names}')
@@ -83,8 +111,7 @@ class Detector(Node):
         rgb = img if msg.encoding == 'rgb8' else img[:, :, ::-1]
 
         t0 = time.time()
-        det = self.model.predict(PILImage.fromarray(np.ascontiguousarray(rgb)),
-                                 threshold=self.threshold)
+        det = self.model.predict(np.ascontiguousarray(rgb), self.threshold)
         t1 = time.time()
 
         out = Detection2DArray()
